@@ -1,0 +1,119 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'message.g.dart';
+
+/// Types of messages exchanged between app and agent
+enum MessageType {
+  query,
+  response,
+  contextUpdate,
+  error,
+}
+
+/// Source of the AI response
+enum ResponseSource {
+  ollama,
+  claude,
+  hybrid, // Ollama + Claude combination
+}
+
+@JsonSerializable()
+class AgentMessage {
+  final String id;
+  final MessageType type;
+  final String content;
+  final DateTime timestamp;
+  final Map<String, dynamic>? metadata;
+
+  AgentMessage({
+    required this.id,
+    required this.type,
+    required this.content,
+    required this.timestamp,
+    this.metadata,
+  });
+
+  factory AgentMessage.fromJson(Map<String, dynamic> json) =>
+      _$AgentMessageFromJson(json);
+
+  Map<String, dynamic> toJson() => _$AgentMessageToJson(this);
+}
+
+@JsonSerializable()
+class QueryMessage extends AgentMessage {
+  final String userId;
+  final List<String>? contextKeys;
+
+  QueryMessage({
+    required String id,
+    required String content,
+    required this.userId,
+    this.contextKeys,
+    DateTime? timestamp,
+  }) : super(
+          id: id,
+          type: MessageType.query,
+          content: content,
+          timestamp: timestamp ?? DateTime.now(),
+        );
+
+  factory QueryMessage.fromJson(Map<String, dynamic> json) =>
+      _$QueryMessageFromJson(json);
+
+  @override
+  Map<String, dynamic> toJson() => _$QueryMessageToJson(this);
+}
+
+@JsonSerializable()
+class ResponseMessage extends AgentMessage {
+  final ResponseSource source;
+  final bool wasPrivacyFiltered;
+  final double confidenceScore;
+
+  ResponseMessage({
+    required String id,
+    required String content,
+    required this.source,
+    this.wasPrivacyFiltered = false,
+    this.confidenceScore = 1.0,
+    DateTime? timestamp,
+  }) : super(
+          id: id,
+          type: MessageType.response,
+          content: content,
+          timestamp: timestamp ?? DateTime.now(),
+          metadata: {
+            'source': source.name,
+            'wasPrivacyFiltered': wasPrivacyFiltered,
+            'confidenceScore': confidenceScore,
+          },
+        );
+
+  factory ResponseMessage.fromJson(Map<String, dynamic> json) =>
+      _$ResponseMessageFromJson(json);
+
+  @override
+  Map<String, dynamic> toJson() => _$ResponseMessageToJson(this);
+}
+
+@JsonSerializable()
+class ContextData {
+  final String key;
+  final String value;
+  final DateTime createdAt;
+  final DateTime? expiresAt;
+  final List<String> tags;
+
+  ContextData({
+    required this.key,
+    required this.value,
+    required this.createdAt,
+    this.expiresAt,
+    this.tags = const [],
+  });
+
+  factory ContextData.fromJson(Map<String, dynamic> json) =>
+      _$ContextDataFromJson(json);
+
+  Map<String, dynamic> toJson() => _$ContextDataToJson(this);
+}
