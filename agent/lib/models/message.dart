@@ -73,6 +73,7 @@ class ResponseMessage extends AgentMessage {
   final ResponseSource source;
   final bool wasPrivacyFiltered;
   final double confidenceScore;
+  final String? agentName;
 
   ResponseMessage({
     required String id,
@@ -80,6 +81,7 @@ class ResponseMessage extends AgentMessage {
     required this.source,
     this.wasPrivacyFiltered = false,
     this.confidenceScore = 1.0,
+    this.agentName,
     DateTime? timestamp,
   }) : super(
           id: id,
@@ -90,6 +92,7 @@ class ResponseMessage extends AgentMessage {
             'source': source.name,
             'wasPrivacyFiltered': wasPrivacyFiltered,
             'confidenceScore': confidenceScore,
+            if (agentName != null) 'agentName': agentName,
           },
         );
 

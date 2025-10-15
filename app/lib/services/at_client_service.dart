@@ -196,6 +196,7 @@ class AtClientService {
         ),
         source: _parseSource(responseData['source']),
         wasPrivacyFiltered: responseData['wasPrivacyFiltered'] ?? false,
+        agentName: responseData['agentName'] as String?,
       );
 
       // Emit the message to listeners

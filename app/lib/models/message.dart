@@ -8,6 +8,7 @@ class ChatMessage {
   final ResponseSource? source;
   final bool wasPrivacyFiltered;
   final bool isError;
+  final String? agentName;
 
   ChatMessage({
     required this.id,
@@ -17,17 +18,19 @@ class ChatMessage {
     this.source,
     this.wasPrivacyFiltered = false,
     this.isError = false,
+    this.agentName,
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'content': content,
-    'isUser': isUser,
-    'timestamp': timestamp.toIso8601String(),
-    'source': source?.name,
-    'wasPrivacyFiltered': wasPrivacyFiltered,
-    'isError': isError,
-  };
+        'id': id,
+        'content': content,
+        'isUser': isUser,
+        'timestamp': timestamp.toIso8601String(),
+        'source': source?.name,
+        'wasPrivacyFiltered': wasPrivacyFiltered,
+        'isError': isError,
+        if (agentName != null) 'agentName': agentName,
+      };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
@@ -43,6 +46,7 @@ class ChatMessage {
           : null,
       wasPrivacyFiltered: json['wasPrivacyFiltered'] as bool? ?? false,
       isError: json['isError'] as bool? ?? false,
+      agentName: json['agentName'] as String?,
     );
   }
 }

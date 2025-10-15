@@ -22,8 +22,11 @@ void main(List<String> arguments) async {
   final parser = ArgParser()
     ..addFlag('help',
         abbr: 'h', help: 'Show this help message', negatable: false)
-    ..addOption('env',
-        abbr: 'e', help: 'Path to .env file', defaultsTo: '.env');
+    ..addOption('env', abbr: 'e', help: 'Path to .env file', defaultsTo: '.env')
+    ..addOption('name',
+        abbr: 'n',
+        help: 'Agent name (displayed in responses)',
+        defaultsTo: null);
 
   final results = parser.parse(arguments);
 
@@ -67,6 +70,9 @@ void main(List<String> arguments) async {
       ) ??
       0.7;
 
+  // Get agent name from command line or environment
+  final agentName = (results['name'] as String?) ?? getEnv('AGENT_NAME', '');
+
   // Validate configuration
   if (atSign.isEmpty || atKeysPath.isEmpty) {
     logger.severe('AT_SIGN and AT_KEYS_FILE_PATH must be set');
@@ -77,6 +83,9 @@ void main(List<String> arguments) async {
     // Initialize services
     logger.info('Starting Private AI Agent');
     logger.info('atSign: $atSign');
+    if (agentName.isNotEmpty) {
+      logger.info('Agent Name: $agentName');
+    }
     logger.info('Ollama: $ollamaHost ($ollamaModel)');
     logger.info('Claude: ${claudeApiKey.isNotEmpty ? "enabled" : "disabled"}');
 
@@ -103,6 +112,7 @@ void main(List<String> arguments) async {
       ollama: ollama,
       claude: claude,
       privacyThreshold: privacyThreshold,
+      agentName: agentName.isNotEmpty ? agentName : null,
     );
 
     // Initialize agent

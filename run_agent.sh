@@ -115,8 +115,9 @@ echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Run the agent with explicit .env path
-dart run bin/agent.dart --env .env
+# Run the agent with explicit .env path and any additional arguments
+# This allows passing -n "Agent Name" to the script
+dart run bin/agent.dart --env .env "$@"
 
 # If the agent exits, show a message
 echo ""

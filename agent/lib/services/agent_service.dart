@@ -11,6 +11,7 @@ class AgentService {
   final OllamaService ollama;
   final ClaudeService? claude;
   final double privacyThreshold;
+  final String? agentName;
 
   // Store Ollama context per user for conversation continuity
   final Map<String, List<int>> _conversationContexts = {};
@@ -20,6 +21,7 @@ class AgentService {
     required this.ollama,
     this.claude,
     this.privacyThreshold = 0.7,
+    this.agentName,
   });
 
   /// Initialize all services
@@ -90,6 +92,7 @@ class AgentService {
           source: ResponseSource.ollama,
           timestamp: DateTime.now(),
           wasPrivacyFiltered: false,
+          agentName: agentName,
         );
         await atPlatform.sendResponse(query.userId, errorResponse);
       } catch (sendError) {
@@ -142,6 +145,7 @@ class AgentService {
             'An error occurred while processing your query. Please try again.',
         source: ResponseSource.ollama,
         confidenceScore: 0.0,
+        agentName: agentName,
       );
     }
   }
@@ -215,6 +219,7 @@ Respond naturally and conversationally.
       source: ResponseSource.ollama,
       wasPrivacyFiltered: false,
       confidenceScore: 1.0,
+      agentName: agentName,
     );
   }
 
@@ -300,6 +305,7 @@ User: ${query.content}''';
       source: ResponseSource.hybrid,
       wasPrivacyFiltered: true,
       confidenceScore: analysis.confidence,
+      agentName: agentName,
     );
   }
 

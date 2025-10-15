@@ -56,6 +56,17 @@ class ChatBubble extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (!isUser && message.agentName != null) ...[
+                        Text(
+                          message.agentName!,
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                       SelectableText(
                         message.content,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
