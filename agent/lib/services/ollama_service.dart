@@ -18,23 +18,30 @@ class OllamaService {
   /// Generate a response from Ollama
   Future<OllamaResponse> generate({
     required String prompt,
-    List<Map<String, String>>? context,
+    List<int>? context,
     double temperature = 0.7,
   }) async {
     try {
       _logger.info('Generating response with Ollama ($model)');
 
+      final body = {
+        'model': model,
+        'prompt': prompt,
+        'stream': false,
+        'options': {
+          'temperature': temperature,
+        },
+      };
+
+      // Include context if provided (for conversation continuity)
+      if (context != null && context.isNotEmpty) {
+        body['context'] = context;
+      }
+
       final response = await _httpClient.post(
         Uri.parse('$host/api/generate'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'model': model,
-          'prompt': prompt,
-          'stream': false,
-          'options': {
-            'temperature': temperature,
-          },
-        }),
+        body: json.encode(body),
       );
 
       if (response.statusCode != 200) {

@@ -12,6 +12,9 @@ class AgentService {
   final ClaudeService? claude;
   final double privacyThreshold;
 
+  // Store Ollama context per user for conversation continuity
+  final Map<String, List<int>> _conversationContexts = {};
+
   AgentService({
     required this.atPlatform,
     required this.ollama,
@@ -43,6 +46,18 @@ class AgentService {
     }
 
     _logger.info('Agent services initialized successfully');
+  }
+
+  /// Clear conversation context for a user (e.g., when starting a new conversation)
+  void clearConversationContext(String userId) {
+    _conversationContexts.remove(userId);
+    _logger.info('🧹 Cleared conversation context for $userId');
+  }
+
+  /// Clear all conversation contexts
+  void clearAllConversationContexts() {
+    _conversationContexts.clear();
+    _logger.info('🧹 Cleared all conversation contexts');
   }
 
   /// Start listening for incoming queries
@@ -153,27 +168,46 @@ class AgentService {
   ) async {
     _logger.info('Processing with Ollama only (fully private)');
 
-    // Build conversation history string
-    String conversationContext = '';
-    if (query.conversationHistory != null &&
-        query.conversationHistory!.isNotEmpty) {
+    // Get existing conversation context for this user
+    final existingContext = _conversationContexts[query.userId];
+
+    if (existingContext != null) {
       _logger.info(
-          'Including ${query.conversationHistory!.length} previous messages for context');
-      for (final msg in query.conversationHistory!) {
-        final role = msg['role'] == 'user' ? 'User' : 'You';
-        conversationContext += '$role: ${msg['content']}\n';
-      }
+          '📝 Found existing conversation context (${existingContext.length} tokens)');
+    } else {
+      _logger.info('🆕 Starting new conversation for ${query.userId}');
     }
 
-    final prompt = '''
-You are a helpful personal AI assistant having a natural conversation with the user.
+    // Build system message with user's personal context (only on first message)
+    String systemContext = '';
+    if (existingContext == null && context.isNotEmpty) {
+      systemContext =
+          '''You are a helpful personal AI assistant having a natural conversation with the user.
 
-${context.isNotEmpty ? 'User\'s Personal Information:\n$context\n' : ''}${conversationContext.isNotEmpty ? 'Previous messages in this conversation:\n$conversationContext\n' : ''}User: ${query.content}
+User's Personal Information:
+$context
 
-Respond naturally and conversationally. If the user is referring to something mentioned earlier in the chat, just understand and respond to it naturally without explicitly mentioning "our previous conversation" or "as we discussed". Just chat like a helpful assistant would.
+Respond naturally and conversationally.
 ''';
+    }
 
-    final response = await ollama.generate(prompt: prompt);
+    // Build the current prompt
+    final prompt = existingContext == null
+        ? '$systemContext\nUser: ${query.content}'
+        : 'User: ${query.content}';
+
+    _logger.info(
+        '🤖 Sending prompt to Ollama with ${existingContext != null ? "existing" : "new"} context');
+
+    final response = await ollama.generate(
+      prompt: prompt,
+      context: existingContext, // Pass previous conversation context
+    );
+
+    // Store the updated context for next message
+    _conversationContexts[query.userId] = response.context;
+    _logger.info(
+        '💾 Stored conversation context (${response.context.length} tokens)');
 
     return ResponseMessage(
       id: query.id,
@@ -197,14 +231,22 @@ Respond naturally and conversationally. If the user is referring to something me
 
     _logger.info('Processing with hybrid approach (Ollama + Claude)');
 
-    // Build conversation history string
+    // Get existing conversation context for this user
+    final existingContext = _conversationContexts[query.userId];
+
+    // Build brief conversation history for Claude (last 2-3 exchanges only to save tokens)
     String conversationContext = '';
     if (query.conversationHistory != null &&
         query.conversationHistory!.isNotEmpty) {
+      final recentHistory = query.conversationHistory!.length > 6
+          ? query.conversationHistory!
+              .sublist(query.conversationHistory!.length - 6)
+          : query.conversationHistory!;
+
       _logger.info(
-          'Including ${query.conversationHistory!.length} previous messages for context');
-      for (final msg in query.conversationHistory!) {
-        final role = msg['role'] == 'user' ? 'User' : 'You';
+          'Including ${recentHistory.length} recent messages for Claude context');
+      for (final msg in recentHistory) {
+        final role = msg['role'] == 'user' ? 'User' : 'Assistant';
         conversationContext += '$role: ${msg['content']}\n';
       }
     }
@@ -213,9 +255,9 @@ Respond naturally and conversationally. If the user is referring to something me
     final sanitizedQuery = await ollama.sanitizeQuery(query.content, context);
     _logger.info('Sanitized query: $sanitizedQuery');
 
-    // Step 2: Get general knowledge from Claude (include conversation context for better understanding)
+    // Step 2: Get general knowledge from Claude (include recent conversation context)
     final claudePrompt = conversationContext.isNotEmpty
-        ? 'Previous conversation:\n$conversationContext\nUser: $sanitizedQuery'
+        ? 'Recent conversation:\n$conversationContext\nUser: $sanitizedQuery'
         : sanitizedQuery;
 
     final claudeResponse = await claude!.query(
@@ -224,19 +266,33 @@ Respond naturally and conversationally. If the user is referring to something me
     _logger.info(
         'Received response from Claude (${claudeResponse.usage.totalTokens} tokens)');
 
-    // Step 3: Combine Claude's knowledge with user context using Ollama
-    final combinationPrompt = '''
-You are a helpful personal AI assistant having a natural conversation with the user.
+    // Step 3: Combine Claude's knowledge with user context using Ollama with conversation memory
+    final combinationPrompt = existingContext == null
+        ? '''You are a helpful personal AI assistant.
 
-${context.isNotEmpty ? 'User\'s Personal Information:\n$context\n' : ''}${conversationContext.isNotEmpty ? 'Previous messages in this conversation:\n$conversationContext\n' : ''}General knowledge to help answer:
+User's Personal Information:
+$context
+
+General knowledge to help answer:
 ${claudeResponse.content}
 
 User: ${query.content}
 
-Respond naturally using the general knowledge above combined with what you know about the user. If they're referring to something mentioned earlier, just understand and respond naturally without saying things like "as we discussed" or "in our previous conversation". Just chat naturally like a helpful assistant.
-''';
+Respond naturally using the general knowledge combined with what you know about the user.'''
+        : '''General knowledge to help answer:
+${claudeResponse.content}
 
-    final finalResponse = await ollama.generate(prompt: combinationPrompt);
+User: ${query.content}''';
+
+    final finalResponse = await ollama.generate(
+      prompt: combinationPrompt,
+      context: existingContext, // Use conversation context
+    );
+
+    // Store the updated context
+    _conversationContexts[query.userId] = finalResponse.context;
+    _logger.info(
+        '💾 Stored conversation context (${finalResponse.context.length} tokens)');
 
     return ResponseMessage(
       id: query.id,
