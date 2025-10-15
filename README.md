@@ -26,30 +26,47 @@ A privacy-first personal AI agent built with Flutter and Dart. Process 95% of qu
 
 ## 📐 Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Flutter App (@your_sign)                                   │
-│  ┌──────────┐  ┌──────────┐  ┌─────────────────────────┐  │
-│  │  Chat UI │  │ Settings │  │ Ollama-Only Mode Toggle │  │
-│  └──────────┘  └──────────┘  └─────────────────────────┘  │
-└────────────────────────┬────────────────────────────────────┘
-                         │ Encrypted via atPlatform
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Agent Service (@agent_sign)                                │
-│  ┌──────────────┐  ┌──────────────────┐                    │
-│  │ Query Router │──▶ Privacy Analysis │                    │
-│  └──────────────┘  └──────────────────┘                    │
-│         │                    │                              │
-│         ▼                    ▼                              │
-│  ┌─────────────┐      ┌────────────┐                       │
-│  │   Ollama    │      │   Claude   │ (Sanitized queries)  │
-│  │ (Local LLM) │      │    API     │ (Only when needed)   │
-│  └─────────────┘      └────────────┘                       │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Flutter App (@your_sign)"
+        UI[Chat UI]
+        SET[Settings]
+        TOG[Ollama-Only Mode Toggle]
+    end
+    
+    subgraph "atPlatform - End-to-End Encrypted"
+        AT[atServer<br/>🔐 E2E Encryption]
+    end
+    
+    subgraph "Agent Service (@agent_sign)"
+        QR[Query Router]
+        PA[Privacy Analysis]
+        OL[Ollama<br/>Local LLM<br/>95% of queries]
+        CL[Claude API<br/>Sanitized Only<br/>5% of queries]
+        
+        QR --> PA
+        PA --> OL
+        PA --> CL
+    end
+    
+    UI -.->|Encrypted Query| AT
+    SET -.-> AT
+    TOG -.-> AT
+    AT -.->|Notification| QR
+    QR -.->|Encrypted Response| AT
+    AT -.->|Notification| UI
+    
+    style UI fill:#4CAF50
+    style SET fill:#4CAF50
+    style TOG fill:#4CAF50
+    style AT fill:#9C27B0
+    style QR fill:#2196F3
+    style PA fill:#2196F3
+    style OL fill:#FF9800
+    style CL fill:#F44336
 ```
 
-📚 **[See detailed architecture →](ARCHITECTURE.md)**
+📚 **[See detailed architecture with sequence diagrams →](ARCHITECTURE.md)**
 
 ## 🚀 Quick Start
 
