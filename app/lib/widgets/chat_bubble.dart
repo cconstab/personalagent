@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
 
 class ChatBubble extends StatelessWidget {
@@ -67,16 +69,68 @@ class ChatBubble extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                       ],
-                      SelectableText(
-                        message.content,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: isUser
-                                  ? colorScheme.onPrimaryContainer
-                                  : message.isError
+                      // Use Markdown for agent responses, SelectableText for user messages
+                      if (!isUser)
+                        MarkdownBody(
+                          data: message.content,
+                          selectable: true,
+                          styleSheet: MarkdownStyleSheet(
+                            p: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: message.isError
                                       ? colorScheme.onErrorContainer
                                       : colorScheme.onSurfaceVariant,
-                            ),
-                      ),
+                                ),
+                            strong: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: message.isError
+                                      ? colorScheme.onErrorContainer
+                                      : colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                            em: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: message.isError
+                                      ? colorScheme.onErrorContainer
+                                      : colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                            listBullet: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: message.isError
+                                      ? colorScheme.onErrorContainer
+                                      : colorScheme.onSurfaceVariant,
+                                ),
+                            code:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: message.isError
+                                          ? colorScheme.onErrorContainer
+                                          : colorScheme.onSurfaceVariant,
+                                      fontFamily: 'monospace',
+                                      backgroundColor:
+                                          colorScheme.surface.withOpacity(0.3),
+                                    ),
+                          ),
+                          onTapLink: (text, href, title) {
+                            if (href != null) {
+                              launchUrl(Uri.parse(href),
+                                  mode: LaunchMode.externalApplication);
+                            }
+                          },
+                        )
+                      else
+                        SelectableText(
+                          message.content,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onPrimaryContainer,
+                                  ),
+                        ),
                       if (!isUser && message.source != null) ...[
                         const SizedBox(height: 8),
                         _buildSourceBadge(context),
