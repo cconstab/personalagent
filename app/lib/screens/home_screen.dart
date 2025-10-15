@@ -68,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _authenticateWithKeychain(String atSign) async {
     debugPrint('🔐 Authenticating with keychain for $atSign');
-    
+
     final atClientPreference = AtClientPreference()
       ..rootDomain = 'root.atsign.org'
       ..namespace = 'personalagent'
@@ -90,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (result.status != AtOnboardingResultStatus.success) {
       throw Exception('Authentication failed: ${result.message}');
     }
-    
+
     debugPrint('✅ Authenticated successfully with keychain');
   }
 

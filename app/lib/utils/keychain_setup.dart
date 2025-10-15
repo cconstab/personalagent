@@ -21,9 +21,10 @@ class KeychainSetup {
       // NOTE: The SDK automatically stores keys in keychain during onboarding
       // This method is primarily for checking if keys exist
       // Manual keychain storage is handled by the SDK's onboarding flow
-      
+
       print('ℹ️ Keys should be imported during the onboarding flow');
-      print('   If onboarding completed successfully, keys are already in keychain');
+      print(
+          '   If onboarding completed successfully, keys are already in keychain');
       return false;
     } catch (e, st) {
       print('❌ Failed to check keychain: $e');

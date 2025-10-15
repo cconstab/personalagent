@@ -13,23 +13,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _useOllamaOnly = false;
-
   @override
   void initState() {
     super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    // TODO: Load from SharedPreferences
-    setState(() {
-      _useOllamaOnly = false;
-    });
-  }
-
-  Future<void> _saveSettings() async {
-    // TODO: Save to SharedPreferences
   }
 
   void _showAgentAtSignDialog(BuildContext context) {
@@ -130,25 +116,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
-          SwitchListTile(
-            secondary: const Icon(Icons.local_fire_department),
-            title: const Text('Use Ollama Only'),
-            subtitle: const Text('Never send queries to external services'),
-            value: _useOllamaOnly,
-            onChanged: (value) {
-              setState(() {
-                _useOllamaOnly = value;
-              });
-              _saveSettings();
+          Consumer<AgentProvider>(
+            builder: (context, agent, _) {
+              return SwitchListTile(
+                secondary: const Icon(Icons.local_fire_department),
+                title: const Text('Use Ollama Only'),
+                subtitle: const Text('Never send queries to external services'),
+                value: agent.useOllamaOnly,
+                onChanged: (value) {
+                  context.read<AgentProvider>().setUseOllamaOnly(value);
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    value
-                        ? 'Ollama only mode enabled - 100% private'
-                        : 'Hybrid mode enabled - uses Claude when needed',
-                  ),
-                ),
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        value
+                            ? 'Ollama only mode enabled - 100% private'
+                            : 'Hybrid mode enabled - uses Claude when needed',
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -257,9 +244,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: const Text('Cancel'),
                       ),
                       FilledButton(
-                        onPressed: () {
-                          context.read<AuthProvider>().signOut();
-                          Navigator.pop(context);
+                        onPressed: () async {
+                          await context.read<AuthProvider>().signOut();
+                          if (context.mounted) {
+                            // Pop all routes to return to the front screen (onboarding)
+                            Navigator.of(context)
+                                .popUntil((route) => route.isFirst);
+                          }
                         },
                         child: const Text('Sign Out'),
                       ),

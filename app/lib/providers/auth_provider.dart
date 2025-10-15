@@ -33,15 +33,15 @@ class AuthProvider extends ChangeNotifier {
       // 2. Confirmed onboarding completion
       if (savedAtSign != null && hasCompletedOnboarding) {
         debugPrint('✅ Found saved authentication for $savedAtSign');
-        
+
         // Check if keys exist in OS keychain
         final keychainAtSigns = await KeychainSetup.listKeychainAtSigns();
         debugPrint('📦 Keychain contains: $keychainAtSigns');
-        
+
         if (keychainAtSigns.contains(savedAtSign)) {
           debugPrint('✅ Keys found in keychain for $savedAtSign');
           debugPrint('🔐 Will initialize on home screen');
-          
+
           // Mark as authenticated - actual initialization happens on home screen
           // This prevents race conditions with SDK initialization
           _atSign = savedAtSign;
@@ -85,16 +85,23 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
-      // Clear saved preferences
+      debugPrint('🚪 Signing out...');
+
+      // Clear saved preferences only
+      // NOTE: We do NOT clear keys from OS keychain - they persist for next login
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('atSign');
       await prefs.setBool('hasCompletedOnboarding', false);
 
       _atSign = null;
       _isAuthenticated = false;
+
+      debugPrint('✅ Signed out successfully');
+      debugPrint('   PKAM keys remain in keychain for quick re-authentication');
+
       notifyListeners();
     } catch (e) {
-      debugPrint('Sign out error: $e');
+      debugPrint('❌ Sign out error: $e');
     }
   }
 }

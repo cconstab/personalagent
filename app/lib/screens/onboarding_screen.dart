@@ -23,20 +23,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    // CRITICAL: Clear SDK state immediately when screen loads
-    // This must happen BEFORE any SDK interaction
-    _clearSDKStateOnInit();
+    _checkForExistingKeys();
   }
 
-  Future<void> _clearSDKStateOnInit() async {
+  Future<void> _checkForExistingKeys() async {
     try {
-      debugPrint('🔥 CLEARING SDK STATE ON SCREEN INIT');
-      await _clearSDKStateWithoutInitialization();
-      setState(() {
-        _isClearing = false;
-      });
+      // Check if user has keys in keychain already
+      final keychainAtSigns = await KeychainUtil.getAtsignList() ?? [];
+
+      if (keychainAtSigns.isNotEmpty) {
+        debugPrint('📦 Found existing @signs in keychain: $keychainAtSigns');
+        // User has keys - offer to sign in with existing keys
+        setState(() {
+          _isClearing = false;
+        });
+      } else {
+        debugPrint('ℹ️ No existing keys found - will show onboarding flow');
+        // No keys found - clear any stale SDK state before fresh onboarding
+        await _clearSDKStateWithoutInitialization();
+        setState(() {
+          _isClearing = false;
+        });
+      }
     } catch (e) {
-      debugPrint('Error during init clear: $e');
+      debugPrint('Error checking for existing keys: $e');
       setState(() {
         _isClearing = false;
       });
@@ -87,8 +97,112 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      // Navigate to atPlatform authentication
+      // Check for existing keys before showing onboarding
+      _handleGetStarted();
+    }
+  }
+
+  Future<void> _handleGetStarted() async {
+    // Check if user already has keys in keychain
+    final keychainAtSigns = await KeychainUtil.getAtsignList() ?? [];
+
+    if (keychainAtSigns.isNotEmpty && mounted) {
+      // User has existing keys - show selection dialog
+      _showExistingKeysDialog(keychainAtSigns);
+    } else {
+      // No keys found - proceed with normal onboarding
       _handleOnboarding();
+    }
+  }
+
+  void _showExistingKeysDialog(List<String> atSigns) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Welcome Back!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('We found your existing @sign:'),
+            const SizedBox(height: 16),
+            for (final atSign in atSigns)
+              ListTile(
+                leading: const Icon(Icons.account_circle),
+                title: Text(atSign),
+                tileColor:
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _authenticateWithExistingKeys(atSign);
+                },
+              ),
+            const SizedBox(height: 16),
+            const Text(
+              'Or create/import a new @sign:',
+              style: TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _handleOnboarding();
+            },
+            child: const Text('Use Different @sign'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _authenticateWithExistingKeys(String atSign) async {
+    try {
+      debugPrint('🔐 Authenticating with existing keys for $atSign');
+
+      final dir = await getApplicationSupportDirectory();
+
+      final atClientPreference = AtClientPreference()
+        ..rootDomain = 'root.atsign.org'
+        ..namespace = 'personalagent'
+        ..hiveStoragePath = dir.path
+        ..commitLogPath = dir.path
+        ..isLocalStoreRequired = true;
+
+      // Authenticate with existing keys from keychain
+      final result = await AtOnboarding.onboard(
+        context: context,
+        config: AtOnboardingConfig(
+          atClientPreference: atClientPreference,
+          rootEnvironment: RootEnvironment.Production,
+          domain: 'root.atsign.org',
+          appAPIKey: 'personalagent',
+        ),
+      );
+
+      if (result.status == AtOnboardingResultStatus.success) {
+        await _handleSuccessfulOnboarding(result.atsign!);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Authentication failed: ${result.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

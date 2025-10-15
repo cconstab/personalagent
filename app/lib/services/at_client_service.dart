@@ -71,7 +71,7 @@ class AtClientService {
   }
 
   /// Send a query message to the agent
-  Future<void> sendQuery(ChatMessage message) async {
+  Future<void> sendQuery(ChatMessage message, {bool useOllamaOnly = false}) async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized. Call initialize() first.');
     }
@@ -83,6 +83,7 @@ class AtClientService {
     try {
       debugPrint('📤 Sending query to $_agentAtSign');
       debugPrint('   From: $_currentAtSign');
+      debugPrint('   Ollama Only: $useOllamaOnly');
       debugPrint(
           '   Message: ${message.content.substring(0, message.content.length > 50 ? 50 : message.content.length)}...');
 
@@ -93,6 +94,7 @@ class AtClientService {
         'content': message.content,
         'userId': _currentAtSign,
         'timestamp': message.timestamp.toIso8601String(),
+        'useOllamaOnly': useOllamaOnly, // Add privacy setting
       };
 
       // Send as notification with same pattern as at_talk

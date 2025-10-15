@@ -43,12 +43,14 @@ class AgentMessage {
 class QueryMessage extends AgentMessage {
   final String userId;
   final List<String>? contextKeys;
+  final bool useOllamaOnly;
 
   QueryMessage({
     required String id,
     required String content,
     required this.userId,
     this.contextKeys,
+    this.useOllamaOnly = false,
     DateTime? timestamp,
   }) : super(
           id: id,

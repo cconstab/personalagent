@@ -200,17 +200,20 @@ class AtPlatformService {
             _logger.info('✅ JSON decoded successfully (auto-decrypted!)');
 
             // Parse as QueryMessage
+            final useOllamaOnly = jsonData['useOllamaOnly'] ?? false;
             final query = QueryMessage(
               id: jsonData['id'] ??
                   DateTime.now().millisecondsSinceEpoch.toString(),
               content: jsonData['content'] ?? '',
               userId: jsonData['userId'] ?? notification.from ?? '',
+              useOllamaOnly: useOllamaOnly,
               timestamp: DateTime.parse(
                 jsonData['timestamp'] ?? DateTime.now().toIso8601String(),
               ),
             );
 
             _logger.info('⚡ Processing query: ${query.id}');
+            _logger.info('   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}');
             _logger.info(
                 '   Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...');
 

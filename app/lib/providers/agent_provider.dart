@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message.dart';
 import '../services/at_client_service.dart';
 
@@ -7,13 +8,17 @@ class AgentProvider extends ChangeNotifier {
   final List<ChatMessage> _messages = [];
   bool _isProcessing = false;
   String? _agentAtSign;
+  bool _useOllamaOnly = false;
   final AtClientService _atClientService = AtClientService();
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   bool get isProcessing => _isProcessing;
   String? get agentAtSign => _agentAtSign;
+  bool get useOllamaOnly => _useOllamaOnly;
 
   AgentProvider() {
+    _loadSettings();
+    
     // Listen for incoming messages from agent
     _atClientService.messageStream.listen((message) {
       _messages.add(message);
@@ -22,10 +27,25 @@ class AgentProvider extends ChangeNotifier {
     });
   }
 
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _useOllamaOnly = prefs.getBool('useOllamaOnly') ?? false;
+    notifyListeners();
+  }
+
   void setAgentAtSign(String atSign) {
     _agentAtSign = atSign;
     _atClientService.setAgentAtSign(atSign);
     notifyListeners();
+  }
+
+  Future<void> setUseOllamaOnly(bool value) async {
+    _useOllamaOnly = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('useOllamaOnly', value);
+    notifyListeners();
+    
+    debugPrint('🔧 Ollama-only mode: ${value ? "ENABLED" : "DISABLED"}');
   }
 
   Future<void> sendMessage(String content) async {
@@ -81,8 +101,8 @@ class AgentProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Send message to agent via atPlatform
-      await _atClientService.sendQuery(userMessage);
+      // Send message to agent via atPlatform with privacy setting
+      await _atClientService.sendQuery(userMessage, useOllamaOnly: _useOllamaOnly);
 
       // Response will be received via messageStream listener
       // and added to messages automatically
