@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:at_client_mobile/at_client_mobile.dart';
 import '../providers/auth_provider.dart';
 import '../providers/agent_provider.dart';
 import 'context_management_screen.dart';
@@ -78,6 +80,147 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showManageAtSignsDialog() async {
+    // Get list of @signs from keychain
+    final atSigns = await KeychainUtil.getAtsignList() ?? [];
+
+    if (!mounted) return;
+
+    if (atSigns.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No @signs found in keychain')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Manage @signs'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('@signs stored in your keychain:'),
+              const SizedBox(height: 16),
+              ListView.builder(
+                shrinkWrap: true,
+                itemCount: atSigns.length,
+                itemBuilder: (context, index) {
+                  final atSign = atSigns[index];
+                  final isCurrent =
+                      atSign == this.context.read<AuthProvider>().atSign;
+                  return ListTile(
+                    leading: Icon(
+                      Icons.account_circle,
+                      color: isCurrent
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    title: Text(
+                      atSign,
+                      style: TextStyle(
+                        fontWeight:
+                            isCurrent ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: isCurrent ? const Text('Current') : null,
+                    trailing: !isCurrent
+                        ? IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            onPressed: () {
+                              Navigator.pop(dialogContext);
+                              _confirmRemoveAtSign(atSign);
+                            },
+                            tooltip: 'Remove',
+                          )
+                        : null,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmRemoveAtSign(String atSign) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove @sign?'),
+        content: Text(
+          'Remove $atSign from the keychain?\n\nThis will delete the keys permanently. Make sure you have a backup of your .atKeys file.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _removeAtSignFromKeychain(atSign);
+    }
+  }
+
+  Future<void> _removeAtSignFromKeychain(String atSign) async {
+    try {
+      debugPrint('🗑️ Removing $atSign from keychain');
+
+      if (Platform.isMacOS) {
+        final result = await Process.run('security', [
+          'delete-generic-password',
+          '-a',
+          atSign,
+        ]);
+
+        if (result.exitCode == 0) {
+          debugPrint('✅ Removed $atSign from keychain');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$atSign removed from keychain'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          throw Exception('Failed to remove from keychain: ${result.stderr}');
+        }
+      } else {
+        throw Exception('Remove @sign not yet supported on this platform');
+      }
+    } catch (e) {
+      debugPrint('Error removing @sign: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove @sign: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -161,6 +304,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               );
             },
+          ),
+          ListTile(
+            leading: const Icon(Icons.manage_accounts),
+            title: const Text('Manage @signs'),
+            subtitle: const Text('View and remove stored @signs'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showManageAtSignsDialog(),
           ),
           ListTile(
             leading: const Icon(Icons.delete_outline),

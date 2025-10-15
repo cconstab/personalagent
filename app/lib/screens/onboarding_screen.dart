@@ -124,40 +124,150 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('We found your existing @sign:'),
+            const Text('Select an @sign to use:'),
             const SizedBox(height: 16),
             for (final atSign in atSigns)
-              ListTile(
-                leading: const Icon(Icons.account_circle),
-                title: Text(atSign),
-                tileColor:
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: ListTile(
+                  leading: const Icon(Icons.account_circle),
+                  title: Text(atSign),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: () => _confirmRemoveAtSign(atSign),
+                    tooltip: 'Remove from keychain',
+                  ),
+                  tileColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _authenticateWithExistingKeys(atSign);
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _authenticateWithExistingKeys(atSign);
-                },
               ),
             const SizedBox(height: 16),
             const Text(
-              'Or create/import a new @sign:',
-              style: TextStyle(fontSize: 12),
+              'Or add a different @sign:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
             ),
           ],
         ),
         actions: [
           TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              _handleOnboarding();
+              _handleDifferentAtSign();
             },
-            child: const Text('Use Different @sign'),
+            child: const Text('Add @sign'),
           ),
         ],
       ),
     );
+  }
+
+  /// Confirm removal of @sign from keychain
+  Future<void> _confirmRemoveAtSign(String atSign) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove @sign?'),
+        content: Text(
+          'Remove $atSign from the keychain?\n\nYou can always add it back later by importing the .atKeys file.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _removeAtSignFromKeychain(atSign);
+    }
+  }
+
+  /// Remove @sign from keychain
+  Future<void> _removeAtSignFromKeychain(String atSign) async {
+    try {
+      debugPrint('🗑️ Removing $atSign from keychain');
+
+      if (Platform.isMacOS) {
+        // Remove from macOS keychain
+        final result = await Process.run('security', [
+          'delete-generic-password',
+          '-a',
+          atSign,
+        ]);
+
+        if (result.exitCode == 0) {
+          debugPrint('✅ Removed $atSign from keychain');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$atSign removed from keychain'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            // Refresh the dialog
+            Navigator.pop(context);
+            _checkForExistingKeys();
+          }
+        } else {
+          throw Exception('Failed to remove from keychain: ${result.stderr}');
+        }
+      } else {
+        // For other platforms, use KeychainUtil if available
+        // or show a message
+        throw Exception('Remove @sign not yet supported on this platform');
+      }
+    } catch (e) {
+      debugPrint('Error removing @sign: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to remove @sign: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Handle "Add @sign" - allows onboarding with a different @sign
+  Future<void> _handleDifferentAtSign() async {
+    try {
+      debugPrint('🔄 User wants to add a different @sign');
+
+      // Just call onboarding directly - the SDK will handle it
+      // The user can enter a new @sign, or import keys
+      await _handleOnboarding();
+    } catch (e) {
+      debugPrint('Error in _handleDifferentAtSign: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _authenticateWithExistingKeys(String atSign) async {
