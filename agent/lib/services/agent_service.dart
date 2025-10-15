@@ -153,15 +153,24 @@ class AgentService {
   ) async {
     _logger.info('Processing with Ollama only (fully private)');
 
+    // Build conversation history string
+    String conversationContext = '';
+    if (query.conversationHistory != null &&
+        query.conversationHistory!.isNotEmpty) {
+      _logger.info(
+          'Including ${query.conversationHistory!.length} previous messages for context');
+      for (final msg in query.conversationHistory!) {
+        final role = msg['role'] == 'user' ? 'User' : 'You';
+        conversationContext += '$role: ${msg['content']}\n';
+      }
+    }
+
     final prompt = '''
-You are a helpful personal AI assistant. Answer the following question using the provided context.
+You are a helpful personal AI assistant having a natural conversation with the user.
 
-Context:
-$context
+${context.isNotEmpty ? 'User\'s Personal Information:\n$context\n' : ''}${conversationContext.isNotEmpty ? 'Previous messages in this conversation:\n$conversationContext\n' : ''}User: ${query.content}
 
-Question: ${query.content}
-
-Provide a clear, concise, and helpful answer based on the context above.
+Respond naturally and conversationally. If the user is referring to something mentioned earlier in the chat, just understand and respond to it naturally without explicitly mentioning "our previous conversation" or "as we discussed". Just chat like a helpful assistant would.
 ''';
 
     final response = await ollama.generate(prompt: prompt);
@@ -188,31 +197,43 @@ Provide a clear, concise, and helpful answer based on the context above.
 
     _logger.info('Processing with hybrid approach (Ollama + Claude)');
 
+    // Build conversation history string
+    String conversationContext = '';
+    if (query.conversationHistory != null &&
+        query.conversationHistory!.isNotEmpty) {
+      _logger.info(
+          'Including ${query.conversationHistory!.length} previous messages for context');
+      for (final msg in query.conversationHistory!) {
+        final role = msg['role'] == 'user' ? 'User' : 'You';
+        conversationContext += '$role: ${msg['content']}\n';
+      }
+    }
+
     // Step 1: Sanitize the query (remove personal information)
     final sanitizedQuery = await ollama.sanitizeQuery(query.content, context);
     _logger.info('Sanitized query: $sanitizedQuery');
 
-    // Step 2: Get general knowledge from Claude
+    // Step 2: Get general knowledge from Claude (include conversation context for better understanding)
+    final claudePrompt = conversationContext.isNotEmpty
+        ? 'Previous conversation:\n$conversationContext\nUser: $sanitizedQuery'
+        : sanitizedQuery;
+
     final claudeResponse = await claude!.query(
-      sanitizedQuery: sanitizedQuery,
+      sanitizedQuery: claudePrompt,
     );
     _logger.info(
         'Received response from Claude (${claudeResponse.usage.totalTokens} tokens)');
 
     // Step 3: Combine Claude's knowledge with user context using Ollama
     final combinationPrompt = '''
-You are a helpful personal AI assistant. Combine the general knowledge below with the user's personal context to provide a personalized answer.
+You are a helpful personal AI assistant having a natural conversation with the user.
 
-User's Context:
-$context
-
-General Knowledge (from external source):
+${context.isNotEmpty ? 'User\'s Personal Information:\n$context\n' : ''}${conversationContext.isNotEmpty ? 'Previous messages in this conversation:\n$conversationContext\n' : ''}General knowledge to help answer:
 ${claudeResponse.content}
 
-Original Question: ${query.content}
+User: ${query.content}
 
-Provide a personalized answer that combines the general knowledge with the user's specific context.
-Focus on how the information applies to the user's situation.
+Respond naturally using the general knowledge above combined with what you know about the user. If they're referring to something mentioned earlier, just understand and respond naturally without saying things like "as we discussed" or "in our previous conversation". Just chat naturally like a helpful assistant.
 ''';
 
     final finalResponse = await ollama.generate(prompt: combinationPrompt);

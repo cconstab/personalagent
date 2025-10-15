@@ -101,9 +101,20 @@ class AgentProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Send message to agent via atPlatform with privacy setting
-      await _atClientService.sendQuery(userMessage,
-          useOllamaOnly: _useOllamaOnly);
+      // Get conversation history (all messages except the current one)
+      final conversationHistory = _messages.length > 1
+          ? _messages.sublist(0, _messages.length - 1)
+          : <ChatMessage>[];
+
+      debugPrint(
+          '📝 Including ${conversationHistory.length} previous messages for context');
+
+      // Send message to agent via atPlatform with conversation context
+      await _atClientService.sendQuery(
+        userMessage,
+        useOllamaOnly: _useOllamaOnly,
+        conversationHistory: conversationHistory,
+      );
 
       // Response will be received via messageStream listener
       // and added to messages automatically

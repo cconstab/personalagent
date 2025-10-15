@@ -74,9 +74,12 @@ class AtClientService {
     debugPrint('Agent @sign set to: $agentAtSign');
   }
 
-  /// Send a query message to the agent
-  Future<void> sendQuery(ChatMessage message,
-      {bool useOllamaOnly = false}) async {
+  /// Send a query message to the agent with conversation context
+  Future<void> sendQuery(
+    ChatMessage message, {
+    bool useOllamaOnly = false,
+    List<ChatMessage>? conversationHistory,
+  }) async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized. Call initialize() first.');
     }
@@ -90,16 +93,31 @@ class AtClientService {
       debugPrint('   From: $_currentAtSign');
       debugPrint('   Ollama Only: $useOllamaOnly');
       debugPrint(
+          '   With ${conversationHistory?.length ?? 0} previous messages');
+      debugPrint(
           '   Message: ${message.content.substring(0, message.content.length > 50 ? 50 : message.content.length)}...');
 
-      // Create the query data - simple JSON like at_talk
+      // Build conversation context from history
+      final List<Map<String, dynamic>> context = [];
+      if (conversationHistory != null && conversationHistory.isNotEmpty) {
+        for (final msg in conversationHistory) {
+          context.add({
+            'role': msg.isUser ? 'user' : 'assistant',
+            'content': msg.content,
+            'timestamp': msg.timestamp.toIso8601String(),
+          });
+        }
+      }
+
+      // Create the query data with conversation context
       final queryData = {
         'id': message.id,
         'type': 'query',
         'content': message.content,
         'userId': _currentAtSign,
         'timestamp': message.timestamp.toIso8601String(),
-        'useOllamaOnly': useOllamaOnly, // Add privacy setting
+        'useOllamaOnly': useOllamaOnly,
+        'conversationHistory': context, // Include conversation context
       };
 
       // Send as notification with same pattern as at_talk
