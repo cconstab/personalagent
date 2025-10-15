@@ -201,12 +201,17 @@ class AtPlatformService {
 
             // Parse as QueryMessage
             final useOllamaOnly = jsonData['useOllamaOnly'] ?? false;
+            final conversationHistory =
+                jsonData['conversationHistory'] as List<dynamic>?;
+
             final query = QueryMessage(
               id: jsonData['id'] ??
                   DateTime.now().millisecondsSinceEpoch.toString(),
               content: jsonData['content'] ?? '',
               userId: jsonData['userId'] ?? notification.from ?? '',
               useOllamaOnly: useOllamaOnly,
+              conversationHistory:
+                  conversationHistory?.cast<Map<String, dynamic>>(),
               timestamp: DateTime.parse(
                 jsonData['timestamp'] ?? DateTime.now().toIso8601String(),
               ),
@@ -215,6 +220,8 @@ class AtPlatformService {
             _logger.info('⚡ Processing query: ${query.id}');
             _logger.info(
                 '   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}');
+            _logger.info(
+                '   Conversation History: ${conversationHistory?.length ?? 0} messages');
             _logger.info(
                 '   Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...');
 

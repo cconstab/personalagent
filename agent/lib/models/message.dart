@@ -44,6 +44,7 @@ class QueryMessage extends AgentMessage {
   final String userId;
   final List<String>? contextKeys;
   final bool useOllamaOnly;
+  final List<Map<String, dynamic>>? conversationHistory;
 
   QueryMessage({
     required String id,
@@ -51,6 +52,7 @@ class QueryMessage extends AgentMessage {
     required this.userId,
     this.contextKeys,
     this.useOllamaOnly = false,
+    this.conversationHistory,
     DateTime? timestamp,
   }) : super(
           id: id,
