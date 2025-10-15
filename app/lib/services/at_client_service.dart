@@ -71,7 +71,8 @@ class AtClientService {
   }
 
   /// Send a query message to the agent
-  Future<void> sendQuery(ChatMessage message, {bool useOllamaOnly = false}) async {
+  Future<void> sendQuery(ChatMessage message,
+      {bool useOllamaOnly = false}) async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized. Call initialize() first.');
     }

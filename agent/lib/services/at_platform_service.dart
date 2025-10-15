@@ -213,7 +213,8 @@ class AtPlatformService {
             );
 
             _logger.info('⚡ Processing query: ${query.id}');
-            _logger.info('   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}');
+            _logger.info(
+                '   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}');
             _logger.info(
                 '   Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...');
 

@@ -87,10 +87,11 @@ class AgentService {
   Future<ResponseMessage> processQuery(QueryMessage query) async {
     try {
       _logger.info('Processing query: ${query.id}');
-      
+
       // Check if user requested Ollama-only mode
       if (query.useOllamaOnly) {
-        _logger.info('🔒 User requested Ollama-only mode - 100% private processing');
+        _logger.info(
+            '🔒 User requested Ollama-only mode - 100% private processing');
         final context = await _retrieveContext(query);
         return await _processWithOllama(query, context);
       }

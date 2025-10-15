@@ -2,34 +2,54 @@
 
 > **Your intelligent AI assistant that keeps your data private**
 
-A personal AI agent that maintains private context via atPlatform while leveraging Claude's intelligence without leaking personal information. Built with Dart (agent) and Flutter (app), using local Ollama for private processing and Claude API for external knowledge when needed.
+A privacy-first personal AI agent built with Flutter and Dart. Process 95% of queries locally with Ollama, use Claude only for external knowledge (with sanitization), and keep all your personal data encrypted end-to-end via atPlatform.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Flutter](https://img.shields.io/badge/Flutter-3.0+-02569B?logo=flutter)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.0+-0175C2?logo=dart)](https://dart.dev)
+[![atPlatform](https://img.shields.io/badge/atPlatform-E2E%20Encrypted-6C3483)](https://atsign.com)
+[![Ollama](https://img.shields.io/badge/Ollama-Local%20LLM-000000)](https://ollama.ai)
+
+**[🏗️ Architecture](ARCHITECTURE.md)** • **[🚀 Quick Start](#-quick-start)** • **[🔐 Privacy](ARCHITECTURE.md#privacy-architecture)** • **[📖 Docs](#-documentation)**
 
 ## 🌟 Key Features
 
-- **🔒 Privacy-First**: 95% of queries processed locally with Ollama (zero data leakage)
-- **🔐 End-to-End Encryption**: All data encrypted via atPlatform
+- **🔒 Privacy-First**: 95% of queries processed locally with Ollama
+- **🔐 End-to-End Encryption**: All data encrypted via atPlatform  
 - **🧠 Hybrid Intelligence**: Local LLM + Cloud LLM (with sanitization) when needed
-- **📱 Cross-Platform**: Flutter app runs on iOS, Android, Desktop, and Web
+- **🎚️ Ollama-Only Mode**: Toggle for 100% local processing
+- **📱 Cross-Platform**: Flutter app runs on macOS, iOS, Android, Linux, Windows, and Web
 - **🎯 Smart Routing**: Automatically determines when external knowledge is needed
-- **🛡️ Query Sanitization**: Removes personal info before external API calls
+- **🛡️ Query Sanitization**: Removes personal info before any external API calls
 - **✨ Transparent**: See exactly how each response was generated
+- **🔑 Keychain Integration**: Seamless authentication with OS keychain
 
 ## 📐 Architecture
 
 ```
-Flutter App (UI)
-    ↓ (via atPlatform - encrypted)
-@your_agent (Agent Service)
-    ↓
-┌───┴────┐
-↓        ↓
-Ollama   Claude API
-(Local)  (Sanitized queries only)
-    ↓
-atServer (Your encrypted context/memory storage)
+┌─────────────────────────────────────────────────────────────┐
+│  Flutter App (@your_sign)                                   │
+│  ┌──────────┐  ┌──────────┐  ┌─────────────────────────┐  │
+│  │  Chat UI │  │ Settings │  │ Ollama-Only Mode Toggle │  │
+│  └──────────┘  └──────────┘  └─────────────────────────┘  │
+└────────────────────────┬────────────────────────────────────┘
+                         │ Encrypted via atPlatform
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Agent Service (@agent_sign)                                │
+│  ┌──────────────┐  ┌──────────────────┐                    │
+│  │ Query Router │──▶ Privacy Analysis │                    │
+│  └──────────────┘  └──────────────────┘                    │
+│         │                    │                              │
+│         ▼                    ▼                              │
+│  ┌─────────────┐      ┌────────────┐                       │
+│  │   Ollama    │      │   Claude   │ (Sanitized queries)  │
+│  │ (Local LLM) │      │    API     │ (Only when needed)   │
+│  └─────────────┘      └────────────┘                       │
+└─────────────────────────────────────────────────────────────┘
 ```
+
+📚 **[See detailed architecture →](ARCHITECTURE.md)**
 
 ## 🚀 Quick Start
 
@@ -59,24 +79,39 @@ chmod +x setup.sh
    - **Get 2 @signs** from [atsign.com](https://atsign.com/get-an-sign/) (free)
      - One for your agent (e.g., `@alice_agent`)
      - One for your app (e.g., `@alice`)
-   - Edit `agent/.env` with your **agent's** @sign
-   - Place your agent's .atKeys file in `agent/keys/`
-   - Add Claude API key (optional)
-   - **Note:** Your app's @sign is entered during onboarding, not in .env
-   - See [ATSIGN_ARCHITECTURE.md](ATSIGN_ARCHITECTURE.md) for detailed explanation
+   - Edit `agent/.env` with your **agent's** @sign and keys path
+   - Place your agent's `.atKeys` file in `agent/keys/`
+   - Add Claude API key to `agent/.env` (optional, for hybrid mode)
+   - Your app's @sign is set up during first launch (onboarding)
+   - See [ATSIGN_ARCHITECTURE.md](ATSIGN_ARCHITECTURE.md) for details
 
 4. Start the services:
-```bash
-# Option 1: Using Docker Compose (recommended)
-docker compose up
 
-# Option 2: Run separately
-# Terminal 1: Start agent
-cd agent && dart run bin/agent.dart
+   **Option A: Quick Start (Scripts)**
+   ```bash
+   # Terminal 1: Start agent
+   ./run_agent.sh
+   
+   # Terminal 2: Start app  
+   ./run_app.sh
+   ```
 
-# Terminal 2: Start app
-cd app && flutter run
-```
+   **Option B: Docker Compose**
+   ```bash
+   docker compose up
+   ```
+
+   **Option C: Manual**
+   ```bash
+   # Terminal 1: Start Ollama
+   docker run -d -p 11434:11434 ollama/ollama
+   
+   # Terminal 2: Start agent
+   cd agent && dart run bin/agent.dart
+   
+   # Terminal 3: Start app
+   cd app && flutter run
+   ```
 
 ## 📂 Project Structure
 
@@ -109,33 +144,43 @@ personalagent/
 └── README.md
 ```
 
-## 🔐 Privacy Guarantees
+## 🔐 Privacy Model
 
-### What Stays Local (Ollama Only)
-- ✅ All user context and personal information
-- ✅ 95% of queries (simple questions, personal queries, context-based)
-- ✅ All analysis and decision-making logic
-- ✅ Complete conversation history
+### Three Modes of Operation
 
-### What Can Go External (Claude API - Optional)
-- ⚠️ Only sanitized queries with personal information removed
-- ⚠️ Only when local LLM determines external knowledge is needed
-- ⚠️ Generic information requests (e.g., "latest tech trends")
-- ❌ **Never**: Your context, personal data, or history
+1. **🔒 Ollama-Only Mode** (100% Local)
+   - User-enabled toggle in settings
+   - Zero external API calls ever
+   - All processing on your device or local server
+   - Ideal for sensitive queries
 
-## 💡 Example Use Case
+2. **🎯 Hybrid Mode** (Default, 95% Local)
+   - Intelligently routes queries
+   - Local processing for personal/simple queries
+   - External APIs only for current events/specialized knowledge
+   - All personal data sanitized before external calls
 
-**User Query**: "Should I accept this job offer at Acme Corp given my current salary of $120k?"
+3. **📊 What Never Leaves Your Device**
+   - ✅ Your context and personal information
+   - ✅ Conversation history  
+   - ✅ Analysis and decision-making logic
+   - ✅ Any data in Ollama-only mode
 
-**Privacy-Preserving Process**:
-1. **Ollama analyzes**: Determines need for external job market data
-2. **Sanitize**: "Job market analysis for software engineers 2025" → Claude
-3. **Claude returns**: Generic market trends (never sees your salary/company)
-4. **Ollama combines**: Claude's market data + YOUR salary + YOUR context
-5. **Response**: Personalized recommendation based on YOUR situation
+### Example: Privacy-Preserving Query
 
-**What Claude Saw**: Generic job market question  
-**What Claude Didn't See**: Your salary, company name, personal situation
+**Your Query**: "Should I accept this job offer at Acme Corp given my current salary of $120k?"
+
+**Processing**:
+1. 🧠 **Ollama analyzes**: Needs job market data
+2. 🛡️ **Sanitize**: "Software engineer compensation analysis 2025"
+3. ☁️ **Claude receives**: Generic market trends (no personal info)
+4. 🔒 **Ollama combines**: Market data + YOUR salary + YOUR context  
+5. ✅ **Response**: Personalized advice using your private data
+
+**What Claude saw**: Generic market question  
+**What Claude didn't see**: Your salary, company, personal situation
+
+📚 **[Learn more about privacy →](ARCHITECTURE.md#privacy-architecture)**
 
 ## 🛠️ Development
 
@@ -202,14 +247,18 @@ CLAUDE_MODEL=claude-3-5-sonnet-20241022
 PRIVACY_THRESHOLD=0.7  # 0.0-1.0, higher = more local processing
 ```
 
-## 📊 Performance
+## 📊 Performance & Cost
 
-- **Local Processing**: ~95% of queries
-- **External Queries**: ~5% (only when needed)
-- **Latency**: 
-  - Local (Ollama): 1-3 seconds
-  - Hybrid: 3-5 seconds
-- **Cost**: Minimal (Ollama free, Claude only 5% of queries)
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Local Processing** | ~95% of queries | Ollama handles most requests |
+| **External Queries** | ~5% | Only when external knowledge needed |
+| **Latency (Local)** | 1-3 seconds | Ollama processing |
+| **Latency (Hybrid)** | 3-5 seconds | Includes Claude API call |
+| **Cost** | Minimal | Ollama free, Claude usage ~5% |
+| **Privacy Score** | 95-100% | Depending on mode |
+
+📚 **[See detailed performance metrics →](ARCHITECTURE.md#system-performance)**
 
 ## 🤝 Contributing
 
@@ -232,26 +281,76 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Anthropic Claude](https://www.anthropic.com) for external knowledge
 - [Flutter](https://flutter.dev) for cross-platform UI
 
+## 🎓 Quick Reference
+
+### Toggle Ollama-Only Mode
+1. Open app settings (gear icon)
+2. Enable "Use Ollama Only" toggle
+3. All queries now 100% local (no external APIs)
+
+### Check Agent Status
+```bash
+# View agent logs
+tail -f agent/logs/agent.log
+
+# Verify Ollama is running
+curl http://localhost:11434/api/tags
+
+# Test Claude API (optional)
+curl https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $CLAUDE_API_KEY" \
+  -H "anthropic-version: 2023-06-01"
+```
+
+### Common Issues
+- **"No response from agent"** → Check agent is running: `./run_agent.sh`
+- **"Ollama error"** → Verify Ollama: `curl http://localhost:11434/api/tags`
+- **"Authentication failed"** → Check `.atKeys` file exists in correct location
+- **"Keys not found in keychain"** → Re-run onboarding process in app
+
 ## 📞 Support
 
-- 📖 [Documentation](https://github.com/cconstab/personalagent/wiki)
+- 📖 [Full Documentation](ARCHITECTURE.md)
 - 🐛 [Issue Tracker](https://github.com/cconstab/personalagent/issues)
 - 💬 [Discussions](https://github.com/cconstab/personalagent/discussions)
+- 📧 Email: [your-email@example.com]
 
 ## 🗺️ Roadmap
 
-- [x] Basic agent service with Ollama
-- [x] Flutter UI with chat interface
-- [x] Privacy-preserving query routing
-- [ ] Complete atPlatform integration
+### ✅ Completed (v1.0)
+- [x] Agent service with Ollama integration
+- [x] Flutter cross-platform UI
+- [x] Privacy-preserving hybrid query routing
+- [x] atPlatform end-to-end encryption
+- [x] Ollama-only mode toggle
+- [x] Query sanitization
+- [x] Auto-decrypting notifications
+- [x] Keychain integration for seamless auth
+- [x] Smart notification pattern (at_talk_gui)
+
+### 🚧 In Progress (v1.1)
 - [ ] Context management UI
-- [ ] Push notifications for agent responses
-- [ ] Multi-model support (GPT-4, Gemini, etc.)
+- [ ] Enhanced error handling and retry logic
+- [ ] Response streaming for real-time feedback
+
+### 🔮 Future (v2.0+)
+- [ ] Multi-model support (GPT-4, Gemini, local models)
 - [ ] Voice input/output
-- [ ] Mobile app deployment (iOS/Android)
-- [ ] Enhanced analytics and insights
+- [ ] Mobile app store deployment
+- [ ] Background autonomous tasks
+- [ ] Plugin system for extensibility
+- [ ] Privacy-preserving analytics
+
+## 📖 Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed system architecture with diagrams
+- **[ATSIGN_ARCHITECTURE.md](ATSIGN_ARCHITECTURE.md)** - atPlatform integration guide
+- **[OLLAMA_ONLY_MODE.md](OLLAMA_ONLY_MODE.md)** - Privacy mode documentation
+- **[KEYCHAIN_AUTH.md](KEYCHAIN_AUTH.md)** - Authentication flow details
+- **[agent/README.md](agent/README.md)** - Agent service documentation
+- **[app/README.md](app/README.md)** - Flutter app documentation
 
 ---
 
-**The Goal**: Prove that AI can be both intelligent AND private by keeping context local/encrypted while selectively using cloud LLMs for knowledge only.
+**Mission**: Prove that AI can be both intelligent AND private by keeping personal data local/encrypted while selectively using cloud LLMs for external knowledge only.
 

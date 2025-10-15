@@ -18,7 +18,7 @@ class AgentProvider extends ChangeNotifier {
 
   AgentProvider() {
     _loadSettings();
-    
+
     // Listen for incoming messages from agent
     _atClientService.messageStream.listen((message) {
       _messages.add(message);
@@ -44,7 +44,7 @@ class AgentProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('useOllamaOnly', value);
     notifyListeners();
-    
+
     debugPrint('🔧 Ollama-only mode: ${value ? "ENABLED" : "DISABLED"}');
   }
 
@@ -102,7 +102,8 @@ class AgentProvider extends ChangeNotifier {
 
     try {
       // Send message to agent via atPlatform with privacy setting
-      await _atClientService.sendQuery(userMessage, useOllamaOnly: _useOllamaOnly);
+      await _atClientService.sendQuery(userMessage,
+          useOllamaOnly: _useOllamaOnly);
 
       // Response will be received via messageStream listener
       // and added to messages automatically
