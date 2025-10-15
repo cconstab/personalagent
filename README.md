@@ -360,12 +360,21 @@ curl https://api.anthropic.com/v1/messages \
 
 ## 📖 Documentation
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed system architecture with diagrams
-- **[ATSIGN_ARCHITECTURE.md](ATSIGN_ARCHITECTURE.md)** - atPlatform integration guide
-- **[OLLAMA_ONLY_MODE.md](OLLAMA_ONLY_MODE.md)** - Privacy mode documentation
-- **[KEYCHAIN_AUTH.md](KEYCHAIN_AUTH.md)** - Authentication flow details
-- **[agent/README.md](agent/README.md)** - Agent service documentation
-- **[app/README.md](app/README.md)** - Flutter app documentation
+### Core Documentation
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture with Mermaid diagrams
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+
+### User Guides
+- **[atPlatform Integration](docs/guides/ATSIGN_ARCHITECTURE.md)** - How we use atPlatform for E2E encryption
+- **[Ollama-Only Mode](docs/guides/OLLAMA_ONLY_MODE.md)** - 100% local privacy mode feature
+- **[Keychain Authentication](docs/guides/KEYCHAIN_AUTH.md)** - Seamless OS authentication flow
+
+### Component Documentation
+- **[agent/README.md](agent/README.md)** - Agent service (Dart backend)
+- **[app/README.md](app/README.md)** - Flutter app (cross-platform UI)
+
+📚 **[Browse all documentation →](docs/README.md)**
 
 ---
 
