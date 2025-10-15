@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:at_client_mobile/at_client_mobile.dart';
+import 'package:at_onboarding_flutter/at_onboarding_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/agent_provider.dart';
 import 'context_management_screen.dart';
@@ -80,6 +82,174 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showSwitchAtSignDialog() async {
+    // Get list of @signs from keychain
+    final atSigns = await KeychainUtil.getAtsignList() ?? [];
+
+    if (!mounted) return;
+
+    if (atSigns.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No @signs found in keychain')),
+      );
+      return;
+    }
+
+    final currentAtSign = context.read<AuthProvider>().atSign;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Switch @sign'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Select an @sign to switch to:'),
+              const SizedBox(height: 16),
+              ListView.builder(
+                shrinkWrap: true,
+                itemCount: atSigns.length,
+                itemBuilder: (context, index) {
+                  final atSign = atSigns[index];
+                  final isCurrent = atSign == currentAtSign;
+                  return ListTile(
+                    leading: Icon(
+                      Icons.account_circle,
+                      color: isCurrent
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    title: Text(
+                      atSign,
+                      style: TextStyle(
+                        fontWeight:
+                            isCurrent ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: isCurrent ? const Text('Current') : null,
+                    trailing: isCurrent
+                        ? Icon(
+                            Icons.check_circle,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
+                        : null,
+                    onTap: isCurrent
+                        ? null
+                        : () {
+                            Navigator.pop(dialogContext);
+                            _switchToAtSign(atSign);
+                          },
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _switchToAtSign(String atSign) async {
+    try {
+      debugPrint('🔄 Switching to $atSign');
+
+      final currentAtSign = context.read<AuthProvider>().atSign;
+      if (currentAtSign == atSign) {
+        debugPrint('Already using $atSign');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Already using $atSign'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Switching to $atSign...'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      // Clear messages before switching
+      if (mounted) {
+        context.read<AgentProvider>().clearMessages();
+      }
+
+      // Use AtOnboarding.changePrimaryAtsign to switch (like NoPorts)
+      debugPrint('Calling changePrimaryAtsign...');
+      bool switched = await AtOnboarding.changePrimaryAtsign(atsign: atSign);
+      if (!switched) {
+        throw Exception('Failed to change primary @sign to $atSign');
+      }
+
+      // Now onboard with the new @sign
+      final dir = await getApplicationSupportDirectory();
+      final atClientPreference = AtClientPreference()
+        ..rootDomain = 'root.atsign.org'
+        ..namespace = 'personalagent'
+        ..hiveStoragePath = dir.path
+        ..commitLogPath = dir.path
+        ..isLocalStoreRequired = true;
+
+      if (mounted) {
+        final result = await AtOnboarding.onboard(
+          context: context,
+          atsign: atSign,
+          config: AtOnboardingConfig(
+            atClientPreference: atClientPreference,
+            rootEnvironment: RootEnvironment.Production,
+            domain: 'root.atsign.org',
+            appAPIKey: 'personalagent',
+          ),
+        );
+
+        if (result.status == AtOnboardingResultStatus.success) {
+          // Update auth provider
+          await context.read<AuthProvider>().authenticate(atSign);
+
+          // Success! Close settings and stay on home screen
+          if (mounted) {
+            Navigator.of(context).pop(); // Close settings
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Switched to $atSign'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          throw Exception('Onboarding failed: ${result.message}');
+        }
+      }
+    } catch (e) {
+      debugPrint('Error switching @sign: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to switch @sign: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _showManageAtSignsDialog() async {
@@ -234,8 +404,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, auth, _) {
               return ListTile(
                 leading: const Icon(Icons.account_circle),
-                title: const Text('Your @sign'),
+                title: const Text('Current @sign'),
                 subtitle: Text(auth.atSign ?? 'Not signed in'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showSwitchAtSignDialog(),
               );
             },
           ),
@@ -395,6 +567,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       FilledButton(
                         onPressed: () async {
+                          // Clear messages before signing out
+                          context.read<AgentProvider>().clearMessages();
                           await context.read<AuthProvider>().signOut();
                           if (context.mounted) {
                             // Pop all routes to return to the front screen (onboarding)

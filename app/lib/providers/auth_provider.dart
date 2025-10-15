@@ -65,9 +65,19 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> authenticate(String atSign) async {
     try {
+      debugPrint('🔐 Authenticating as $atSign');
+
+      // If switching from a different @sign, we need to reset and switch
+      if (_atSign != null && _atSign != atSign) {
+        debugPrint('⚠️ Switching from $_atSign to $atSign');
+        await _clearCurrentSession();
+        // Reset AtClientService to close old connections
+        await _atClientService.reset();
+      }
+
       _atSign = atSign;
 
-      // Initialize atClient
+      // Initialize atClient (will handle SDK switching if needed)
       await _atClientService.initialize(atSign);
 
       // Save to preferences
@@ -83,9 +93,19 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Clear current session state (but keep keychain keys)
+  Future<void> _clearCurrentSession() async {
+    debugPrint('🧹 Clearing current session state');
+    // This will be called when switching @signs
+    // Subclasses or other providers can override/extend this
+  }
+
   Future<void> signOut() async {
     try {
-      debugPrint('🚪 Signing out...');
+      debugPrint('🚪 Signing out from $_atSign...');
+
+      // CRITICAL: Reset the AtClientService to close connections
+      await _atClientService.reset();
 
       // Clear saved preferences only
       // NOTE: We do NOT clear keys from OS keychain - they persist for next login
@@ -97,7 +117,7 @@ class AuthProvider extends ChangeNotifier {
       _isAuthenticated = false;
 
       debugPrint('✅ Signed out successfully');
-      debugPrint('   PKAM keys remain in keychain for quick re-authentication');
+      debugPrint('   AtClient closed, PKAM keys remain in keychain');
 
       notifyListeners();
     } catch (e) {

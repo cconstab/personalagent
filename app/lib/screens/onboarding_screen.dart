@@ -116,56 +116,111 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _showExistingKeysDialog(List<String> atSigns) {
+    final TextEditingController atSignController = TextEditingController();
+
     showDialog(
       context: context,
+      barrierDismissible: false, // Must select an option
       builder: (context) => AlertDialog(
-        title: const Text('Welcome Back!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Select an @sign to use:'),
-            const SizedBox(height: 16),
-            for (final atSign in atSigns)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: ListTile(
-                  leading: const Icon(Icons.account_circle),
-                  title: Text(atSign),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () => _confirmRemoveAtSign(atSign),
-                    tooltip: 'Remove from keychain',
-                  ),
-                  tileColor:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _authenticateWithExistingKeys(atSign);
-                  },
-                ),
+        title: const Text('Select @sign'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Choose an @sign to sign in with:'),
+              const SizedBox(height: 16),
+              ListView.builder(
+                shrinkWrap: true,
+                itemCount: atSigns.length,
+                itemBuilder: (context, index) {
+                  final atSign = atSigns[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: ListTile(
+                      leading: const Icon(Icons.account_circle),
+                      title: Text(atSign),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            onPressed: () {
+                              Navigator.pop(context);
+                              _confirmRemoveAtSign(atSign);
+                            },
+                            tooltip: 'Remove',
+                          ),
+                        ],
+                      ),
+                      tileColor:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      onTap: () {
+                        debugPrint('👆 User selected: $atSign');
+                        Navigator.pop(context);
+                        _authenticateWithExistingKeys(atSign);
+                      },
+                    ),
+                  );
+                },
               ),
-            const SizedBox(height: 16),
-            const Text(
-              'Or add a different @sign:',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-            ),
-          ],
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Or add a different @sign:',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: atSignController,
+                decoration: InputDecoration(
+                  hintText: 'Enter @sign (e.g., @alice)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.alternate_email),
+                ),
+                onChanged: (value) {
+                  // Auto-add @ symbol if not present
+                  if (value.isNotEmpty && !value.startsWith('@')) {
+                    atSignController.value = TextEditingValue(
+                      text: '@$value',
+                      selection:
+                          TextSelection.collapsed(offset: value.length + 1),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
             onPressed: () {
               Navigator.pop(context);
-              _handleDifferentAtSign();
             },
-            child: const Text('Add @sign'),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              final newAtSign = atSignController.text.trim();
+              if (newAtSign.isEmpty || newAtSign == '@') {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter an @sign'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              _handleAddNewAtSign(newAtSign);
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Add @sign'),
           ),
         ],
       ),
@@ -202,39 +257,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  /// Remove @sign from keychain
+  /// Remove @sign from keychain (uses SDK method like NoPorts)
   Future<void> _removeAtSignFromKeychain(String atSign) async {
     try {
       debugPrint('🗑️ Removing $atSign from keychain');
 
-      if (Platform.isMacOS) {
-        // Remove from macOS keychain
-        final result = await Process.run('security', [
-          'delete-generic-password',
-          '-a',
-          atSign,
-        ]);
+      // Use KeyChainManager (same as NoPorts) to properly delete from keychain
+      await KeyChainManager.getInstance().resetAtSignFromKeychain(atSign);
 
-        if (result.exitCode == 0) {
-          debugPrint('✅ Removed $atSign from keychain');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$atSign removed from keychain'),
-                backgroundColor: Colors.green,
-              ),
-            );
-            // Refresh the dialog
-            Navigator.pop(context);
-            _checkForExistingKeys();
-          }
-        } else {
-          throw Exception('Failed to remove from keychain: ${result.stderr}');
-        }
-      } else {
-        // For other platforms, use KeychainUtil if available
-        // or show a message
-        throw Exception('Remove @sign not yet supported on this platform');
+      debugPrint('✅ Removed $atSign from keychain');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$atSign removed from keychain'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Refresh the dialog
+        _checkForExistingKeys();
       }
     } catch (e) {
       debugPrint('Error removing @sign: $e');
@@ -249,16 +290,63 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  /// Handle "Add @sign" - allows onboarding with a different @sign
-  Future<void> _handleDifferentAtSign() async {
+  /// Handle "Add New @sign" - onboard a new @sign without clearing existing ones
+  Future<void> _handleAddNewAtSign(String newAtSign) async {
     try {
-      debugPrint('🔄 User wants to add a different @sign');
+      debugPrint('➕ User wants to add: $newAtSign');
 
-      // Just call onboarding directly - the SDK will handle it
-      // The user can enter a new @sign, or import keys
-      await _handleOnboarding();
+      // IMPORTANT: Clear SDK's biometric storage for this specific @sign
+      // This prevents the SDK from finding old/partial keys and trying PKAM auth
+      if (Platform.isMacOS || Platform.isIOS) {
+        debugPrint('Clearing SDK biometric storage for $newAtSign...');
+        final result = await Process.run('security', [
+          'delete-generic-password',
+          '-a',
+          newAtSign,
+          '-s',
+          '@atsigns:com.example.personalAgentApp', // SDK's biometric key
+        ]);
+        if (result.exitCode == 0) {
+          debugPrint('✅ Cleared SDK biometric storage for $newAtSign');
+        } else if (result.stderr.toString().contains('could not be found')) {
+          debugPrint(
+              'ℹ️ No SDK biometric entry found for $newAtSign (this is fine)');
+        }
+      }
+
+      // Clear the app's current state but preserve other @signs' keys in keychain
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('atSign');
+      await prefs.setBool('hasCompletedOnboarding', false);
+
+      // Clear the app's local storage to start fresh
+      final dir = await getApplicationSupportDirectory();
+      final hiveDir = Directory(dir.path);
+      if (await hiveDir.exists()) {
+        await for (var entity in hiveDir.list(recursive: true)) {
+          if (entity is File) {
+            final name = entity.path.split('/').last;
+            if (name.endsWith('.hive') ||
+                name.endsWith('.lock') ||
+                name.endsWith('.hivelock')) {
+              try {
+                await entity.delete();
+              } catch (e) {
+                debugPrint('Could not delete $name: $e');
+              }
+            }
+          }
+        }
+      }
+
+      debugPrint('✅ Cleared app state. Ready to onboard $newAtSign');
+      debugPrint('Note: SDK will create fresh state for $newAtSign');
+
+      // Show onboarding for the specific @sign
+      // Now SDK won't find any existing keys and will show proper import/activate UI
+      await _handleOnboarding(atsign: newAtSign);
     } catch (e) {
-      debugPrint('Error in _handleDifferentAtSign: $e');
+      debugPrint('Error in _handleAddNewAtSign: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -283,9 +371,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ..commitLogPath = dir.path
         ..isLocalStoreRequired = true;
 
-      // Authenticate with existing keys from keychain
+      // Check if we need to switch @signs (if one is already active)
+      try {
+        final currentAtSign =
+            AtClientManager.getInstance().atClient.getCurrentAtSign();
+        if (currentAtSign != null && currentAtSign != atSign) {
+          debugPrint('🔄 Switching from $currentAtSign to $atSign');
+          // Tell SDK to switch primary @sign
+          bool switched =
+              await AtOnboarding.changePrimaryAtsign(atsign: atSign);
+          if (!switched) {
+            throw Exception('Failed to switch from $currentAtSign to $atSign');
+          }
+          debugPrint('✅ Primary @sign switched');
+        }
+      } catch (e) {
+        // AtClientManager not initialized yet - that's fine, first login
+        debugPrint('No existing AtClient to switch from: $e');
+      }
+
+      // CRITICAL: Pass atsign parameter to force authentication with this specific @sign
       final result = await AtOnboarding.onboard(
         context: context,
+        atsign: atSign, // Force authentication with selected @sign
         config: AtOnboardingConfig(
           atClientPreference: atClientPreference,
           rootEnvironment: RootEnvironment.Production,
@@ -387,7 +495,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  Future<void> _handleOnboarding() async {
+  Future<void> _handleOnboarding({String? atsign}) async {
     try {
       // SDK state was already cleared in initState()
       // Use app's Application Support directory (isolated from ~/.atsign)
@@ -401,18 +509,107 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ..commitLogPath = dir.path
         ..isLocalStoreRequired = true;
 
-      // DON'T pass atsign parameter - let the SDK show its own atsign input
-      // This prevents the SDK from immediately checking keychain for a specific atsign
-      // The user will enter @cconstab in the SDK's UI, and by then we've cleared the keychain
+      // Check if the specified @sign already exists in keychain
+      final keychainAtSigns = await KeychainUtil.getAtsignList() ?? [];
+      final atSignExists = atsign != null && keychainAtSigns.contains(atsign);
+
+      if (atSignExists) {
+        // User tried to add an @sign that's already in the keychain
+        debugPrint('⚠️ $atsign already exists in keychain: $keychainAtSigns');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '$atsign is already in your keychain. Use the sign-in option instead.'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        // Show the selection dialog again
+        _handleGetStarted();
+        return;
+      }
+
+      debugPrint(
+          '✅ $atsign not in keychain. Current keychain: $keychainAtSigns');
+
+      // Track whether user chose import or activate
+      bool isImporting = false;
+
+      // If a specific @sign was provided, show choice dialog
+      if (atsign != null && atsign.isNotEmpty) {
+        debugPrint('Checking server status for $atsign...');
+        // Show a choice dialog: Import keys or Activate new @sign
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('How would you like to add this @sign?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Choose how to set up $atsign:'),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.file_upload),
+                  title: const Text('Import .atKeys file'),
+                  subtitle: const Text('Use existing keys from another device'),
+                  onTap: () => Navigator.pop(context, 'import'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.add_circle),
+                  title: const Text('Activate new @sign'),
+                  subtitle: const Text('Activate a new @sign you own'),
+                  onTap: () => Navigator.pop(context, 'activate'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        );
+
+        if (choice == null) {
+          // User cancelled
+          _handleGetStarted();
+          return;
+        }
+
+        // Store the choice
+        isImporting = choice == 'import';
+        if (isImporting) {
+          debugPrint('User chose to import keys for $atsign');
+          debugPrint(
+              '⚠️ For import, NOT passing atsign to SDK - let it detect from file');
+        } else {
+          debugPrint('User chose to activate $atsign');
+        }
+      }
+
+      // Call SDK onboarding with the appropriate configuration
+      // CRITICAL: For import flow, DON'T pass atsign parameter!
+      // - If importing: Let SDK detect @sign from the imported .atKeys file
+      // - If activating: Pass the atsign to start activation for that specific @sign
       final result = await AtOnboarding.onboard(
         context: context,
-        // NO atsign parameter! This is the key - SDK won't check keychain immediately
+        // Only pass atsign for activation, not for import
+        atsign: isImporting ? null : atsign,
+        isSwitchingAtsign: atsign != null, // This is adding a new @sign
         config: AtOnboardingConfig(
           atClientPreference: atClientPreference,
           rootEnvironment: RootEnvironment.Production,
           domain: 'root.atsign.org',
           appAPIKey: 'personalagent',
-          hideQrScan: true, // Hide QR code and file upload options
+          // Hide QR code scanner, only show file upload option
+          hideQrScan: true,
+          // Add theme for better visibility
+          theme: AtOnboardingTheme(
+            primaryColor: Theme.of(context).colorScheme.primary,
+          ),
         ),
       );
 
@@ -422,12 +619,22 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           break;
 
         case AtOnboardingResultStatus.error:
+          debugPrint('❌ Onboarding error: ${result.message}');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Onboarding failed: ${result.message}'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Onboarding failed',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(result.message ?? 'Unknown error'),
+                  ],
+                ),
                 backgroundColor: Colors.red,
-                duration: const Duration(seconds: 5),
+                duration: const Duration(seconds: 8),
               ),
             );
           }

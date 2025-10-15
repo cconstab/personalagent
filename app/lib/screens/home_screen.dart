@@ -39,6 +39,9 @@ class _HomeScreenState extends State<HomeScreen> {
       if (authProvider.atSign != null) {
         debugPrint('🔄 Initializing AtClient for ${authProvider.atSign}');
 
+        // Clear old messages when switching @signs
+        agentProvider.clearMessages();
+
         // Use the SDK's onboarding to authenticate with keychain keys
         await _authenticateWithKeychain(authProvider.atSign!);
 
@@ -76,9 +79,29 @@ class _HomeScreenState extends State<HomeScreen> {
       ..commitLogPath = (await getApplicationSupportDirectory()).path
       ..isLocalStoreRequired = true;
 
-    // Use the onboarding service to authenticate with keychain
+    // Check if we need to switch @signs (like NoPorts does)
+    try {
+      final currentAtSign =
+          AtClientManager.getInstance().atClient.getCurrentAtSign();
+      if (currentAtSign != null && currentAtSign != atSign) {
+        debugPrint('🔄 Switching from $currentAtSign to $atSign');
+        // Tell SDK to switch primary @sign
+        bool switched = await AtOnboarding.changePrimaryAtsign(atsign: atSign);
+        if (!switched) {
+          throw Exception('Failed to switch from $currentAtSign to $atSign');
+        }
+        debugPrint('✅ Primary @sign switched');
+      }
+    } catch (e) {
+      // AtClientManager not initialized yet - that's fine, first login
+      debugPrint('No existing AtClient to switch from (first login)');
+    }
+
+    // CRITICAL: Pass the atsign parameter to force authentication with specific @sign
+    // Without this, SDK will use whatever @sign is already initialized
     final result = await AtOnboarding.onboard(
       context: context,
+      atsign: atSign, // Force authentication with this specific @sign
       config: AtOnboardingConfig(
         atClientPreference: atClientPreference,
         rootEnvironment: RootEnvironment.Production,
@@ -91,7 +114,8 @@ class _HomeScreenState extends State<HomeScreen> {
       throw Exception('Authentication failed: ${result.message}');
     }
 
-    debugPrint('✅ Authenticated successfully with keychain');
+    debugPrint(
+        '✅ Authenticated successfully with keychain as ${result.atsign}');
   }
 
   @override

@@ -124,7 +124,9 @@ class AgentProvider extends ChangeNotifier {
   }
 
   void clearMessages() {
+    debugPrint('🧹 Clearing ${_messages.length} messages');
     _messages.clear();
+    _isProcessing = false;
     notifyListeners();
   }
 }

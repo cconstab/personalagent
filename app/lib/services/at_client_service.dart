@@ -25,14 +25,8 @@ class AtClientService {
 
   /// Initialize atClient for the current user
   Future<void> initialize(String atSign) async {
-    if (_atClient != null && _currentAtSign == atSign) {
-      debugPrint('AtClientService already initialized for $atSign');
-      return;
-    }
-
     try {
       debugPrint('🔄 Initializing AtClientService for $atSign');
-      _currentAtSign = atSign;
 
       // Get the AtClientManager instance (set by at_onboarding_flutter)
       _atClientManager = AtClientManager.getInstance();
@@ -45,7 +39,17 @@ class AtClientService {
 
       final currentAtSign = manager.atClient.getCurrentAtSign();
 
+      // Check if SDK is using wrong @sign
+      if (currentAtSign != null && currentAtSign != atSign) {
+        debugPrint('⚠️ SDK is using $currentAtSign but we want $atSign');
+        debugPrint(
+            '   This indicates AtOnboarding.onboard() did not switch @signs properly');
+        throw Exception(
+            'SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
+      }
+
       if (currentAtSign != null) {
+        _currentAtSign = atSign;
         _atClient = manager.atClient;
         debugPrint('✅ AtClient initialized for $currentAtSign');
 
@@ -270,6 +274,29 @@ class AtClientService {
       debugPrint('StackTrace: $stackTrace');
       return false;
     }
+  }
+
+  /// Reset the service (for switching @signs or signing out)
+  Future<void> reset() async {
+    debugPrint('🔄 Resetting AtClientService');
+    debugPrint('   Closing connections for $_currentAtSign');
+
+    // Stop notification listener if active
+    try {
+      if (_atClient != null) {
+        _atClient!.notificationService.stopAllSubscriptions();
+        debugPrint('   Stopped notification subscriptions');
+      }
+    } catch (e) {
+      debugPrint('   Error stopping notifications: $e');
+    }
+
+    // Clear references
+    _atClient = null;
+    _atClientManager = null;
+    _currentAtSign = null;
+
+    debugPrint('✅ AtClientService reset complete');
   }
 
   /// Cleanup resources
