@@ -2,8 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:at_client_mobile/at_client_mobile.dart';
+import 'package:at_onboarding_flutter/at_onboarding_flutter.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 import '../services/at_client_service.dart' as app_service;
 
@@ -17,6 +18,30 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _isClearing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // CRITICAL: Clear SDK state immediately when screen loads
+    // This must happen BEFORE any SDK interaction
+    _clearSDKStateOnInit();
+  }
+
+  Future<void> _clearSDKStateOnInit() async {
+    try {
+      debugPrint('🔥 CLEARING SDK STATE ON SCREEN INIT');
+      await _clearSDKStateWithoutInitialization();
+      setState(() {
+        _isClearing = false;
+      });
+    } catch (e) {
+      debugPrint('Error during init clear: $e');
+      setState(() {
+        _isClearing = false;
+      });
+    }
+  }
 
   final List<OnboardingPage> _pages = [
     OnboardingPage(
@@ -63,51 +88,137 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
     } else {
       // Navigate to atPlatform authentication
-      _startAtOnboarding();
+      _handleOnboarding();
     }
   }
 
-  Future<void> _startAtOnboarding() async {
-    // Show dialog to get atSign and keys file
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) => const _AtSignInputDialog(),
-    );
+  /// Handles successful onboarding by initializing services and updating auth state
+  Future<void> _handleSuccessfulOnboarding(String atSign) async {
+    // Initialize our app service wrapper
+    final atClientService = app_service.AtClientService();
+    await atClientService.initialize(atSign);
+    atClientService.setAgentAtSign('@llama');
 
-    if (result == null) return; // User cancelled
-
-    final atSign = result['atSign']!;
-    final keysFilePath = result['keysFilePath']!;
-
-    // Show loading
+    // Update auth provider
     if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(),
+      await context.read<AuthProvider>().authenticate(atSign);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Authenticated as $atSign'),
+          backgroundColor: Colors.green,
         ),
       );
     }
+  }
 
+  /// Clear SDK state without initializing the SDK
+  /// This prevents race condition where SDK recreates entries we're trying to clear
+  Future<void> _clearSDKStateWithoutInitialization() async {
     try {
-      await _initializeAtClient(atSign, keysFilePath);
-      
-      if (mounted) {
-        Navigator.pop(context); // Close loading
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Authenticated as $atSign'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      debugPrint('Clearing SDK state before onboarding...');
+
+      // 1. Clear SDK's biometric storage entry using security command directly
+      // This DOES NOT initialize the SDK like KeyChainManager.getInstance() does
+      if (Platform.isMacOS) {
+        final result = await Process.run('security', [
+          'delete-generic-password',
+          '-a',
+          '@atsigns:com.example.personalAgentApp'
+        ]);
+        if (result.exitCode == 0) {
+          debugPrint('✅ SDK biometric storage entry cleared');
+        } else if (result.stderr.toString().contains('could not be found')) {
+          debugPrint('No SDK biometric storage entry to clear');
+        }
+      }
+
+      // 2. Clear SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('atSign');
+      await prefs.setBool('hasCompletedOnboarding', false);
+      debugPrint('✅ SharedPreferences cleared');
+
+      // 3. Clear Hive storage
+      final dir = await getApplicationSupportDirectory();
+      final hiveDir = Directory(dir.path);
+      if (await hiveDir.exists()) {
+        await for (var entity in hiveDir.list(recursive: true)) {
+          if (entity is File) {
+            final name = entity.path.split('/').last;
+            if (name.endsWith('.hive') ||
+                name.endsWith('.lock') ||
+                name.endsWith('.hivelock')) {
+              await entity.delete();
+            }
+          }
+        }
+        debugPrint('✅ Hive storage cleared');
+      }
+
+      debugPrint('✅ All SDK state cleared - ready for onboarding');
+    } catch (e) {
+      debugPrint('Note: Error clearing SDK state: $e');
+      // Not critical - continue with onboarding anyway
+    }
+  }
+
+  Future<void> _handleOnboarding() async {
+    try {
+      // SDK state was already cleared in initState()
+      // Use app's Application Support directory (isolated from ~/.atsign)
+      // This prevents conflicts with other atSign apps like NoPortsDesktop
+      final dir = await getApplicationSupportDirectory();
+
+      final atClientPreference = AtClientPreference()
+        ..rootDomain = 'root.atsign.org'
+        ..namespace = 'personalagent'
+        ..hiveStoragePath = dir.path // Isolated storage in app directory
+        ..commitLogPath = dir.path
+        ..isLocalStoreRequired = true;
+
+      // DON'T pass atsign parameter - let the SDK show its own atsign input
+      // This prevents the SDK from immediately checking keychain for a specific atsign
+      // The user will enter @cconstab in the SDK's UI, and by then we've cleared the keychain
+      final result = await AtOnboarding.onboard(
+        context: context,
+        // NO atsign parameter! This is the key - SDK won't check keychain immediately
+        config: AtOnboardingConfig(
+          atClientPreference: atClientPreference,
+          rootEnvironment: RootEnvironment.Production,
+          domain: 'root.atsign.org',
+          appAPIKey: 'personalagent',
+          hideQrScan: true, // Hide QR code and file upload options
+        ),
+      );
+
+      switch (result.status) {
+        case AtOnboardingResultStatus.success:
+          await _handleSuccessfulOnboarding(result.atsign!);
+          break;
+
+        case AtOnboardingResultStatus.error:
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Onboarding failed: ${result.message}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          break;
+
+        case AtOnboardingResultStatus.cancel:
+          // User cancelled onboarding
+          break;
       }
     } catch (e) {
       if (mounted) {
-        Navigator.pop(context); // Close loading
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Authentication failed: ${e.toString()}'),
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
         );
@@ -115,52 +226,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  Future<void> _initializeAtClient(String atSign, String keysFilePath) async {
-    // Ensure @ prefix
-    final formattedAtSign = atSign.startsWith('@') ? atSign : '@$atSign';
-
-    // Get app documents directory for storage
-    final appDocumentsDirectory = await getApplicationDocumentsDirectory();
-
-    // Configure atClient preferences
-    final atClientPreference = AtClientPreference()
-      ..rootDomain = 'root.atsign.org'
-      ..namespace = 'personalagent'
-      ..hiveStoragePath = appDocumentsDirectory.path
-      ..commitLogPath = appDocumentsDirectory.path
-      ..isLocalStoreRequired = true;
-
-    // Validate keys file exists
-    final keysFile = File(keysFilePath);
-    if (!await keysFile.exists()) {
-      throw Exception('Keys file not found at $keysFilePath');
-    }
-
-    // Initialize AtClientManager with keys
-    final atClientManager = AtClientManager.getInstance();
-    await atClientManager.setCurrentAtSign(
-      formattedAtSign,
-      'personalagent',
-      atClientPreference,
-    );
-
-    // TODO: Properly load encryption keys from file
-    // The keys file should be parsed and loaded into the keystore
-    // This is simplified for now - production needs proper key management
-
-    // Initialize app service
-    final atClientService = app_service.AtClientService();
-    await atClientService.initialize(formattedAtSign);
-    atClientService.setAgentAtSign('@llama');
-    
-    // Update auth provider
-    if (mounted) {
-      await context.read<AuthProvider>().authenticate(formattedAtSign);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Show loading indicator while clearing SDK state
+    if (_isClearing) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 24),
+              Text(
+                'Preparing your secure environment...',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -277,156 +363,6 @@ class OnboardingPage extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _AtSignInputDialog extends StatefulWidget {
-  const _AtSignInputDialog();
-
-  @override
-  State<_AtSignInputDialog> createState() => _AtSignInputDialogState();
-}
-
-class _AtSignInputDialogState extends State<_AtSignInputDialog> {
-  final TextEditingController _atSignController = TextEditingController();
-  String? _keysFilePath;
-
-  @override
-  void dispose() {
-    _atSignController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickKeysFile() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['atKeys'],
-      dialogTitle: 'Select your .atKeys file',
-    );
-
-    if (result != null && result.files.single.path != null) {
-      setState(() {
-        _keysFilePath = result.files.single.path;
-      });
-    }
-  }
-
-  void _submit() {
-    final atSign = _atSignController.text.trim();
-    
-    if (atSign.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your @sign')),
-      );
-      return;
-    }
-
-    if (_keysFilePath == null || _keysFilePath!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select your .atKeys file')),
-      );
-      return;
-    }
-
-    Navigator.pop(context, {
-      'atSign': atSign,
-      'keysFilePath': _keysFilePath!,
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('atPlatform Authentication'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter your @sign and select your .atKeys file.',
-              style: TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _atSignController,
-              decoration: const InputDecoration(
-                labelText: '@sign',
-                hintText: '@cconstab',
-                border: OutlineInputBorder(),
-                prefixText: '@',
-              ),
-              autofocus: true,
-              onSubmitted: (_) => _submit(),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _pickKeysFile,
-              icon: const Icon(Icons.folder_open),
-              label: Text(_keysFilePath == null
-                  ? 'Select .atKeys File'
-                  : 'Keys file selected ✓'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-              ),
-            ),
-            if (_keysFilePath != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _keysFilePath!.split('/').last,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.withOpacity(0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Need help?',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '• Get a free @sign at atsign.com\n'
-                    '• Keys file is usually in ~/.atsign/keys/\n'
-                    '• File format: @yoursign_key.atKeys',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Authenticate'),
-        ),
-      ],
     );
   }
 }

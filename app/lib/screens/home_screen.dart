@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/agent_provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/at_client_service.dart';
 import '../widgets/chat_bubble.dart';
 import '../widgets/input_field.dart';
 import 'settings_screen.dart';
@@ -15,6 +17,48 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
+  bool _isInitializing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeAtClient();
+  }
+
+  Future<void> _initializeAtClient() async {
+    if (_isInitializing) return;
+    _isInitializing = true;
+
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final agentProvider = context.read<AgentProvider>();
+
+      if (authProvider.atSign != null) {
+        debugPrint('🔄 Initializing AtClient for ${authProvider.atSign}');
+
+        final atClientService = AtClientService();
+        await atClientService.initialize(authProvider.atSign!);
+
+        // Set agent @sign if not already set
+        if (agentProvider.agentAtSign == null) {
+          agentProvider.setAgentAtSign('@llama');
+        }
+
+        debugPrint('✅ AtClient initialized successfully');
+      }
+    } catch (e) {
+      debugPrint('❌ Failed to initialize AtClient: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to connect: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -48,7 +92,28 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Private AI Agent'),
+        title: Consumer2<AuthProvider, AgentProvider>(
+          builder: (context, auth, agent, _) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  auth.atSign ?? 'Private AI Agent',
+                  style: const TextStyle(fontSize: 16),
+                ),
+                if (agent.agentAtSign != null)
+                  Text(
+                    '→ ${agent.agentAtSign}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.normal,
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
@@ -81,22 +146,22 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 16),
                         Text(
                           'Start a conversation',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withOpacity(0.5),
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withOpacity(0.5),
+                                  ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Ask me anything. I\'ll keep your data private.',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withOpacity(0.3),
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withOpacity(0.3),
+                                  ),
                         ),
                       ],
                     ),

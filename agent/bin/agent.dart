@@ -110,12 +110,9 @@ void main(List<String> arguments) async {
     logger.info('Agent initialized successfully');
 
     // Start listening for messages
-    logger.info('Agent is now listening for queries...');
+    await agent.startListening();
+    logger.info('✅ Agent is now listening for queries...');
     logger.info('Press Ctrl+C to stop');
-
-    // TODO: Implement message listening loop
-    // This would typically listen to atPlatform notifications
-    // and process incoming queries
 
     // Keep the process running
     await ProcessSignal.sigint.watch().first;

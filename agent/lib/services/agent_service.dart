@@ -45,6 +45,44 @@ class AgentService {
     _logger.info('Agent services initialized successfully');
   }
 
+  /// Start listening for incoming queries
+  Future<void> startListening() async {
+    _logger.info('Starting to listen for queries');
+    await atPlatform.subscribeToMessages(_handleIncomingQuery);
+    _logger.info('Now listening for queries');
+  }
+
+  /// Handle incoming query from user
+  Future<void> _handleIncomingQuery(QueryMessage query) async {
+    try {
+      _logger.info('⚡ Handling query from ${query.userId}');
+
+      // Process the query
+      final response = await processQuery(query);
+
+      // Send response back to user
+      await atPlatform.sendResponse(query.userId, response);
+
+      _logger.info('✅ Sent response to ${query.userId}');
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to handle query', e, stackTrace);
+
+      // Send error response
+      try {
+        final errorResponse = ResponseMessage(
+          id: query.id,
+          content: 'Sorry, I encountered an error processing your request.',
+          source: ResponseSource.ollama,
+          timestamp: DateTime.now(),
+          wasPrivacyFiltered: false,
+        );
+        await atPlatform.sendResponse(query.userId, errorResponse);
+      } catch (sendError) {
+        _logger.severe('Failed to send error response', sendError);
+      }
+    }
+  }
+
   /// Process a user query with privacy-preserving logic
   Future<ResponseMessage> processQuery(QueryMessage query) async {
     try {

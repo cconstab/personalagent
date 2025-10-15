@@ -31,37 +31,36 @@ class AtClientService {
     }
 
     try {
-      debugPrint('Initializing AtClientService for $atSign');
+      debugPrint('🔄 Initializing AtClientService for $atSign');
       _currentAtSign = atSign;
 
-      // Get the AtClientManager instance
+      // Get the AtClientManager instance (set by at_onboarding_flutter)
       _atClientManager = AtClientManager.getInstance();
-      
-      // Check if atClient is already initialized (from at_onboarding_flutter)
-      if (_atClientManager?.atClient.getCurrentAtSign() != null) {
-        _atClient = _atClientManager!.atClient;
-        debugPrint('Using existing atClient for ${_atClient!.getCurrentAtSign()}');
-      } else {
-        // AtClient not initialized yet - this requires proper onboarding
-        debugPrint('WARNING: AtClient not initialized. User needs to complete onboarding with at_onboarding_flutter');
-        debugPrint('For demo purposes, setting up minimal client...');
-        
-        // For now, just store the atSign
-        // In production, this should trigger proper at_onboarding_flutter flow
-        _atClient = null;
+
+      // The AtClient should now be initialized by at_onboarding_flutter
+      final manager = _atClientManager;
+      if (manager == null) {
+        throw Exception('AtClientManager not initialized');
       }
 
-      // Start listening for notifications if client is ready
-      if (_atClient != null) {
+      final currentAtSign = manager.atClient.getCurrentAtSign();
+
+      if (currentAtSign != null) {
+        _atClient = manager.atClient;
+        debugPrint('✅ AtClient initialized for $currentAtSign');
+
+        // Start listening for notifications
         _startNotificationListener();
-        debugPrint('AtClientService initialized successfully');
+        debugPrint('✅ Notification listener started');
       } else {
-        debugPrint('AtClientService initialized in limited mode (no atClient available)');
+        // This shouldn't happen after successful onboarding
+        throw Exception(
+            'AtClient not initialized. Onboarding may not have completed successfully.');
       }
     } catch (e, stackTrace) {
-      debugPrint('Failed to initialize AtClientService: $e');
+      debugPrint('❌ Failed to initialize AtClientService: $e');
       debugPrint('StackTrace: $stackTrace');
-      // Don't rethrow - allow app to continue in limited mode
+      rethrow; // Rethrow so caller knows initialization failed
     }
   }
 
@@ -82,9 +81,12 @@ class AtClientService {
     }
 
     try {
-      debugPrint('Sending query to $_agentAtSign');
+      debugPrint('📤 Sending query to $_agentAtSign');
+      debugPrint('   From: $_currentAtSign');
+      debugPrint(
+          '   Message: ${message.content.substring(0, message.content.length > 50 ? 50 : message.content.length)}...');
 
-      // Create the query data
+      // Create the query data - simple JSON like at_talk
       final queryData = {
         'id': message.id,
         'type': 'query',
@@ -93,16 +95,33 @@ class AtClientService {
         'timestamp': message.timestamp.toIso8601String(),
       };
 
-      // Send as notification to agent
+      // Send as notification with same pattern as at_talk
+      final metadata = Metadata()
+        ..isPublic = false
+        ..isEncrypted = true
+        ..namespaceAware = true;
+
+      final atKey = AtKey()
+        ..key = 'query'
+        ..namespace = 'personalagent'
+        ..sharedWith = _agentAtSign
+        ..sharedBy = _currentAtSign
+        ..metadata = metadata;
+
+      debugPrint('   Key: ${atKey.toString()}');
+
       final jsonData = json.encode(queryData);
 
+      // Send encrypted notification - SDK handles encryption automatically
       final notificationResult = await _atClient!.notificationService.notify(
-        NotificationParams.forText(jsonData, _agentAtSign!),
+        NotificationParams.forUpdate(atKey, value: jsonData),
+        checkForFinalDeliveryStatus: false,
+        waitForFinalDeliveryStatus: false,
       );
 
-      debugPrint(
-        'Query sent successfully: ${notificationResult.notificationID}',
-      );
+      debugPrint('✅ Query sent successfully!');
+      debugPrint('   Notification ID: ${notificationResult.notificationID}');
+      debugPrint('   To: $_agentAtSign');
     } catch (e, stackTrace) {
       debugPrint('Failed to send query: $e');
       debugPrint('StackTrace: $stackTrace');
@@ -114,16 +133,17 @@ class AtClientService {
   void _startNotificationListener() {
     if (_atClient == null) return;
 
-    debugPrint('Starting notification listener');
+    debugPrint('🔔 Starting notification listener for messages from agent');
 
     _atClient!.notificationService
-        .subscribe(regex: 'response.*', shouldDecrypt: true)
+        .subscribe(regex: 'message.*', shouldDecrypt: true)
         .listen(
       (notification) {
+        debugPrint('📨 Received notification from ${notification.from}');
         _handleNotification(notification);
       },
       onError: (error) {
-        debugPrint('Notification listener error: $error');
+        debugPrint('❌ Notification listener error: $error');
       },
     );
   }
@@ -191,10 +211,7 @@ class AtClientService {
 
     try {
       final keys = await _atClient!.getAtKeys(regex: 'context.*');
-      return keys
-          .where((key) => key.key != null)
-          .map((key) => key.key!.replaceFirst('context.', ''))
-          .toList();
+      return keys.map((key) => key.key.replaceFirst('context.', '')).toList();
     } catch (e, stackTrace) {
       debugPrint('Failed to get context keys: $e');
       debugPrint('StackTrace: $stackTrace');

@@ -1,272 +1,167 @@
-# Communication Flow: Flutter App ↔ Agent
+# Communication Flow - Fixed! ✅
 
-This document explains how the Flutter app communicates with the Dart agent service using atPlatform's end-to-end encrypted messaging.
+## The Problem (FIXED)
+The original code was confused about WHO sends AS whom. Now fixed!
 
-## 🏗️ Architecture Overview
+## The Solution
 
+### Correct Flow
 ```
-┌─────────────────┐         ┌──────────────┐         ┌─────────────────┐
-│   Flutter App   │◄────────►│  atPlatform  │◄────────►│  Agent Service  │
-│   (@user_sign)  │ encrypted│   (atServer) │ encrypted│ (@agent_sign)   │
-└─────────────────┘          └──────────────┘          └─────────────────┘
-```
-
-## 🔐 Key Components
-
-### 1. **atPlatform** (The Communication Layer)
-- Provides end-to-end encrypted messaging
-- Acts as the secure intermediary
-- Both app and agent authenticate with their own @signs
-- Messages are encrypted before transmission
-- Only the recipient can decrypt
-
-### 2. **Flutter App** (Client)
-- **Location**: `/app/lib/services/at_client_service.dart`
-- **Responsibilities**:
-  - Initialize atClient with user's @sign
-  - Send encrypted queries to agent
-  - Listen for encrypted responses
-  - Manage local message state
-
-### 3. **Agent Service** (Server)
-- **Location**: `/agent/lib/services/at_platform_service.dart`
-- **Responsibilities**:
-  - Initialize atClient with agent's @sign
-  - Listen for incoming queries
-  - Process queries (Ollama/Claude)
-  - Send encrypted responses back
-
-## 📨 Complete Message Flow
-
-### 1️⃣ User Sends Query
-
-```
-User types in Flutter app
-         ↓
-AgentProvider.sendMessage()
-         ↓
-AtClientService.sendQuery()
-         ↓
-Creates AtKey with agent's @sign
-         ↓
-atPlatform encrypts with agent's public key
-         ↓
-Sends notification to agent's atServer
+User (@cconstab) → sends query → Agent (@llama)
+Agent (@llama) → sends response → User (@cconstab)
 ```
 
-### 2️⃣ Agent Receives & Processes
+### App (Flutter) Side
 
-```
-Agent's notification listener triggers
-         ↓
-atPlatform decrypts with agent's private key
-         ↓
-AgentService.processQuery()
-         ↓
-Retrieves user context from atServer
-         ↓
-Ollama analyzes query + context
-         ↓
-Decides: Local (95%) or Hybrid (5%)
-         ↓
-Generates response
-```
-
-### 3️⃣ Agent Sends Response
-
-```
-AgentService creates ResponseMessage
-         ↓
-AtPlatformService.sendResponse()
-         ↓
-Creates AtKey with user's @sign
-         ↓
-atPlatform encrypts with user's public key
-         ↓
-Sends notification to user's atServer
-```
-
-### 4️⃣ User Receives Response
-
-```
-App's notification listener triggers
-         ↓
-atPlatform decrypts with user's private key
-         ↓
-AtClientService emits message via stream
-         ↓
-AgentProvider receives and adds to messages
-         ↓
-UI updates with new message
-```
-
-## 🔑 Key Implementation Details
-
-### AtKey Structure
+**Sending Queries TO Agent:**
 ```dart
-AtKey()
-  ..key = 'query.12345'           // Unique message ID
-  ..namespace = 'personalagent'   // App-specific namespace
-  ..sharedWith = '@recipient'     // Only this @sign can decrypt
+// App (logged in AS @cconstab) sends query TO @llama
+final atKey = AtKey()
+  ..key = 'query.${message.id}'
+  ..namespace = 'personalagent'
+  ..sharedWith = _agentAtSign;  // TO @llama
+
+await _atClient!.notificationService.notify(
+  NotificationParams.forUpdate(atKey, value: jsonData),
+);
 ```
 
-### Message Types
-| Direction | Notification Pattern | Content |
-|-----------|---------------------|---------|
-| App → Agent | `query.*` | User query + metadata |
-| Agent → App | `response.*` | AI response + source info |
-| Storage | `context.*` | User's encrypted context data |
-
-### Code Locations
-
-**Flutter App:**
-- Service: `app/lib/services/at_client_service.dart` ✅ Created
-- Provider: `app/lib/providers/agent_provider.dart` ✅ Updated
-- Models: `app/lib/models/message.dart` ✅ Ready
-
-**Agent Service:**
-- Platform: `agent/lib/services/at_platform_service.dart` ✅ Ready
-- Orchestration: `agent/lib/services/agent_service.dart` ✅ Ready
-- Models: `agent/lib/models/message.dart` ⏳ Needs JSON generation
-
-## 🛡️ Security & Privacy
-
-### End-to-End Encryption
-1. Message created on device
-2. JSON-encoded
-3. Encrypted with recipient's public key (RSA 2048)
-4. Transmitted encrypted
-5. Decrypted with recipient's private key
-6. Private keys never leave devices
-
-### What atPlatform Sees
-- ❌ Message content (encrypted)
-- ❌ User context (encrypted)
-- ✅ Sender/recipient @signs (metadata)
-- ✅ Timestamp (metadata)
-
-### What Claude Sees (5% of queries)
-- ✅ Sanitized query only
-- ❌ User's personal information
-- ❌ Conversation history
-- ❌ User context
-
-## 📊 Data Flow Diagram
-
-```
-┌─────────────────────────────────────────────────┐
-│                  Flutter App                    │
-│                                                 │
-│  User Input → AgentProvider → AtClientService  │
-│       ↑                              ↓          │
-│       └──────────Stream──────────────┘          │
-└───────────────────────┬─────────────────────────┘
-                        │ Encrypted
-                        │ Notifications
-                        ↓
-              ┌──────────────────┐
-              │   atPlatform     │
-              │   (atServer)     │
-              └──────────────────┘
-                        ↓
-┌───────────────────────┬─────────────────────────┐
-│                  Agent Service                  │
-│                                                 │
-│  AtPlatformService → AgentService → Response   │
-│         ↓                 ↓           ↓         │
-│    Listener         Ollama/Claude   Storage    │
-└─────────────────────────────────────────────────┘
+**Listening for Responses FROM Agent:**
+```dart
+// App listens for messages FROM @llama
+_atClient!.notificationService
+  .subscribe(regex: 'message.*', shouldDecrypt: true)
+  .listen((notification) {
+    // notification.from will be @llama
+    _handleNotification(notification);
+  });
 ```
 
-## 🚀 Quick Start Guide
+### Agent (Backend) Side
 
-### 1. Configure Agent
-```bash
-cd agent
-cp .env.example .env
-# Edit .env with your @agent_sign and atKeys path
+**Listening for Queries FROM Users:**
+```dart
+// Agent (logged in AS @llama) listens for queries FROM users
+_atClient!.notificationService
+  .subscribe(regex: 'query.*', shouldDecrypt: true)
+  .listen((notification) async {
+    // notification.from will be @cconstab
+    final query = parseQuery(notification);
+    await onQueryReceived(query);
+  });
 ```
 
-### 2. Start Agent
+**Sending Responses TO Users:**
+```dart
+// Agent sends response TO user
+final atKey = AtKey()
+  ..key = 'message.${response.id}'
+  ..namespace = 'personalagent'
+  ..sharedWith = recipientAtSign;  // TO @cconstab
+
+await _atClient!.notificationService.notify(
+  NotificationParams.forUpdate(atKey, value: jsonData),
+);
+```
+
+## Key Patterns
+
+| Pattern | Direction | Sender | Receiver | Purpose |
+|---------|-----------|--------|----------|---------|
+| `query.*` | User → Agent | @cconstab | @llama | Send question to agent |
+| `message.*` | Agent → User | @llama | @cconstab | Send answer to user |
+
+## Who Uses Which @sign
+
+### App (@cconstab)
+- **Authenticated AS**: @cconstab (uses @cconstab's keys)
+- **Sends TO**: @llama (via `sharedWith` parameter)
+- **Receives FROM**: @llama (via notification.from)
+
+### Agent (@llama)
+- **Authenticated AS**: @llama (uses @llama's keys)
+- **Receives FROM**: @cconstab (via notification.from)
+- **Sends TO**: @cconstab (via `sharedWith` parameter)
+
+## Processing Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. User sends message in app                                    │
+│    - App (AS @cconstab) creates query with key 'query.123'     │
+│    - Sets sharedWith = '@llama'                                 │
+│    - Sends encrypted notification TO @llama                     │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Agent receives notification                                   │
+│    - Agent (AS @llama) listening for 'query.*' pattern         │
+│    - Receives notification FROM @cconstab                       │
+│    - Decrypts and parses query                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Agent processes query                                         │
+│    - Retrieves context from atPlatform storage                  │
+│    - Analyzes with Ollama (95% of queries)                      │
+│    - OR uses hybrid mode with Claude (5% of queries)            │
+│    - Creates response message                                    │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Agent sends response                                          │
+│    - Agent (AS @llama) creates message with key 'message.456'  │
+│    - Sets sharedWith = '@cconstab'                              │
+│    - Sends encrypted notification TO @cconstab                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. App receives response                                         │
+│    - App (AS @cconstab) listening for 'message.*' pattern      │
+│    - Receives notification FROM @llama                          │
+│    - Decrypts and displays to user                              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Configuration in UI
+
+Users can configure the agent @sign in Settings:
+```
+Settings → Agent @sign → Enter: @llama → Save
+```
+
+This tells the app:
+- **WHERE** to send queries (TO @llama)
+- **WHO** to expect responses from (FROM @llama)
+
+## Testing the Flow
+
+### 1. Start Agent
 ```bash
 cd agent
 dart run bin/agent.dart
-# Should see: "Agent is now listening for queries..."
 ```
 
-### 3. Run Flutter App
-```bash
-cd app
-flutter run
+Look for:
+```
+✅ Agent is now listening for queries...
 ```
 
-### 4. Set Agent @sign in App
-```dart
-// In onboarding or settings
-agentProvider.setAgentAtSign('@your_agent');
+### 2. Send Message from App
+Type a message in the app, e.g., "Hello agent"
+
+### 3. Check Agent Logs
+You should see:
+```
+📨 Received query from @cconstab
+Processing query: 123
+⚡ Handling query from @cconstab
+✅ Sent response to @cconstab
 ```
 
-### 5. Send Test Message
-- Type message in app
-- Watch agent console for received query
-- See response appear in app
-
-## 📝 Implementation Checklist
-
-### ✅ Completed
-- [x] Message data models (app & agent)
-- [x] AtClientService for Flutter app
-- [x] AtPlatformService for agent
-- [x] AgentProvider integration
-- [x] UI components
-- [x] Privacy indicators
-
-### ⏳ Required Next
-- [ ] Run `flutter pub get` in app/
-- [ ] Run `dart pub get` in agent/
-- [ ] Run `dart run build_runner build` in agent/ (JSON serialization)
-- [ ] Complete atPlatform onboarding flow
-- [ ] Add error handling
-- [ ] Add offline support
-- [ ] Add message persistence
-
-## 🧪 Testing
-
-### Manual Test
-```bash
-# Terminal 1: Start agent
-cd agent && dart run bin/agent.dart
-
-# Terminal 2: Run app
-cd app && flutter run
-
-# In app: Send "Hello agent"
-# Expected: Response appears in 2-5 seconds
+### 4. Check App
+Response should appear in chat:
 ```
-
-### Debug Logging
-```dart
-// Enable in at_client_service.dart
-debugPrint('Sending: ${message.content}');
-debugPrint('Received: ${notification.value}');
+You: Hello agent
+Agent: Hi! How can I help you today?
 ```
-
-## 🆘 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| "AtClient not initialized" | Call `initialize()` with @sign first |
-| "Agent @sign not set" | Call `setAgentAtSign()` before sending |
-| Messages not received | Check notification listener is active |
-| Decryption failed | Verify atKeys files are correct |
-| Connection timeout | Check internet, atServer availability |
-
-## 📚 Resources
-
-- [atPlatform Docs](https://docs.atsign.com)
-- [Notification Service Guide](https://docs.atsign.com/sdk/guide/notifications/)
-- [atClient API](https://pub.dev/packages/at_client)
-
----
-
-**Bottom Line**: Communication happens through atPlatform's encrypted notification system. Messages are automatically encrypted/decrypted, ensuring complete privacy while enabling real-time bidirectional communication between the Flutter app and agent service.

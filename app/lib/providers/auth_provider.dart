@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/at_client_service.dart';
+import '../services/at_client_service.dart' as app_service;
 
 /// Authentication state provider
 class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
   bool _isLoading = true;
   String? _atSign;
-  final AtClientService _atClientService = AtClientService();
+  final app_service.AtClientService _atClientService =
+      app_service.AtClientService();
 
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
@@ -17,24 +18,27 @@ class AuthProvider extends ChangeNotifier {
     _checkAuthStatus();
   }
 
+  // NOTE: Keychain clearing has been moved to OnboardingScreen._handleOnboarding()
+  // to avoid race condition where calling KeyChainManager here initializes the SDK
+  // which then recreates the biometric storage entries we're trying to clear.
+
   Future<void> _checkAuthStatus() async {
     try {
+      // Just check saved auth status - don't clear keychain here!
+
       final prefs = await SharedPreferences.getInstance();
       final savedAtSign = prefs.getString('atSign');
       final hasCompletedOnboarding =
           prefs.getBool('hasCompletedOnboarding') ?? false;
 
       if (savedAtSign != null && hasCompletedOnboarding) {
+        // Just mark as authenticated based on saved preferences
+        // Don't initialize atClient here - let the onboarding widget handle that
+        // This avoids triggering keychain checks before onboarding completes
         _atSign = savedAtSign;
         _isAuthenticated = true;
-
-        // Try to initialize atClient
-        try {
-          await _atClientService.initialize(savedAtSign);
-        } catch (e) {
-          debugPrint('Failed to initialize atClient: $e');
-          // Continue anyway, user can re-authenticate if needed
-        }
+        debugPrint(
+            'Found saved auth for $savedAtSign - will initialize on home screen');
       }
     } catch (e) {
       debugPrint('Error checking auth status: $e');

@@ -32,6 +32,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // TODO: Save to SharedPreferences
   }
 
+  void _showAgentAtSignDialog(BuildContext context) {
+    final controller = TextEditingController(
+      text: context.read<AgentProvider>().agentAtSign ?? '@llama',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Configure Agent @sign'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the @sign of your agent backend:',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Agent @sign',
+                hintText: '@llama',
+                prefixIcon: Icon(Icons.alternate_email),
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Make sure your agent is running with this @sign.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final atSign = controller.text.trim();
+              if (atSign.isNotEmpty) {
+                // Add @ prefix if missing
+                final formattedAtSign =
+                    atSign.startsWith('@') ? atSign : '@$atSign';
+                context.read<AgentProvider>().setAgentAtSign(formattedAtSign);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content: Text('Agent @sign set to $formattedAtSign')),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -45,6 +107,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: const Icon(Icons.account_circle),
                 title: const Text('Your @sign'),
                 subtitle: Text(auth.atSign ?? 'Not signed in'),
+              );
+            },
+          ),
+          Consumer<AgentProvider>(
+            builder: (context, agent, _) {
+              return ListTile(
+                leading: const Icon(Icons.smart_toy),
+                title: const Text('Agent @sign'),
+                subtitle: Text(agent.agentAtSign ?? 'Not configured'),
+                trailing: const Icon(Icons.edit),
+                onTap: () => _showAgentAtSignDialog(context),
               );
             },
           ),

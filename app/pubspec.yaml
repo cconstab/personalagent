@@ -13,8 +13,7 @@ dependencies:
 
   # atPlatform SDK
   at_client_mobile: ^3.2.0
-  # Note: at_onboarding_flutter has dependency conflicts with showcaseview
-  # Using custom onboarding implementation instead
+  at_onboarding_flutter: 6.1.7
 
   # State management
   provider: ^6.1.1
@@ -24,17 +23,20 @@ dependencies:
   flutter_markdown: ^0.6.18
 
   # Utils
-  intl: ^0.18.1
+  intl: ^0.19.0
   path_provider: ^2.1.1
   shared_preferences: ^2.2.2
   url_launcher: ^6.2.2
-  file_picker: ^8.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^3.0.1
+
+dependency_overrides:
+  # Match noports project's working versions
+  showcaseview: 3.0.0
 
 flutter:
   uses-material-design: true

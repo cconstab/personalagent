@@ -15,9 +15,8 @@ class ChatBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
@@ -36,9 +35,8 @@ class ChatBubble extends StatelessWidget {
           ],
           Flexible(
             child: Column(
-              crossAxisAlignment: isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -46,8 +44,8 @@ class ChatBubble extends StatelessWidget {
                     color: isUser
                         ? colorScheme.primaryContainer
                         : message.isError
-                        ? colorScheme.errorContainer
-                        : colorScheme.surfaceVariant,
+                            ? colorScheme.errorContainer
+                            : colorScheme.surfaceVariant,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -58,15 +56,15 @@ class ChatBubble extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      SelectableText(
                         message.content,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: isUser
-                              ? colorScheme.onPrimaryContainer
-                              : message.isError
-                              ? colorScheme.onErrorContainer
-                              : colorScheme.onSurfaceVariant,
-                        ),
+                              color: isUser
+                                  ? colorScheme.onPrimaryContainer
+                                  : message.isError
+                                      ? colorScheme.onErrorContainer
+                                      : colorScheme.onSurfaceVariant,
+                            ),
                       ),
                       if (!isUser && message.source != null) ...[
                         const SizedBox(height: 8),
@@ -79,8 +77,8 @@ class ChatBubble extends StatelessWidget {
                 Text(
                   _formatTime(message.timestamp),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurface.withOpacity(0.5),
-                  ),
+                        color: colorScheme.onSurface.withOpacity(0.5),
+                      ),
                 ),
               ],
             ),
@@ -133,9 +131,9 @@ class ChatBubble extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w500,
-          ),
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
         ),
         if (message.wasPrivacyFiltered) ...[
           const SizedBox(width: 8),
@@ -144,9 +142,9 @@ class ChatBubble extends StatelessWidget {
           Text(
             'Privacy Filtered',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.primary,
-              fontWeight: FontWeight.w500,
-            ),
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
           ),
         ],
       ],

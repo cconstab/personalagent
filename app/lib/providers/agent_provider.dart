@@ -31,6 +31,43 @@ class AgentProvider extends ChangeNotifier {
   Future<void> sendMessage(String content) async {
     if (content.trim().isEmpty) return;
 
+    debugPrint('📤 Attempting to send message...');
+    debugPrint('   AtClient initialized: ${_atClientService.isInitialized}');
+    debugPrint('   Agent @sign: $_agentAtSign');
+
+    // Check if AtClient is initialized
+    if (!_atClientService.isInitialized) {
+      debugPrint('❌ AtClient not initialized!');
+      final errorMessage = ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        content: 'Error: Not connected to atPlatform. Please restart the app.',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isError: true,
+      );
+      _messages.add(errorMessage);
+      notifyListeners();
+      return;
+    }
+
+    // Check if agent @sign is configured
+    if (_agentAtSign == null) {
+      debugPrint('❌ Agent @sign not configured!');
+      final errorMessage = ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        content:
+            'Error: Agent @sign not configured. Please set it in Settings.',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isError: true,
+      );
+      _messages.add(errorMessage);
+      notifyListeners();
+      return;
+    }
+
+    debugPrint('✅ All checks passed, sending message to $_agentAtSign');
+
     // Add user message
     final userMessage = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
