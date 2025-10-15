@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:at_client_mobile/at_client_mobile.dart';
+import 'package:at_onboarding_flutter/at_onboarding_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import '../providers/agent_provider.dart';
 import '../providers/auth_provider.dart';
-import '../services/at_client_service.dart';
+import '../services/at_client_service.dart' as app_service;
 import '../widgets/chat_bubble.dart';
 import '../widgets/input_field.dart';
 import 'settings_screen.dart';
@@ -36,7 +39,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (authProvider.atSign != null) {
         debugPrint('🔄 Initializing AtClient for ${authProvider.atSign}');
 
-        final atClientService = AtClientService();
+        // Use the SDK's onboarding to authenticate with keychain keys
+        await _authenticateWithKeychain(authProvider.atSign!);
+
+        final atClientService = app_service.AtClientService();
         await atClientService.initialize(authProvider.atSign!);
 
         // Set agent @sign if not already set
@@ -58,6 +64,34 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     }
+  }
+
+  Future<void> _authenticateWithKeychain(String atSign) async {
+    debugPrint('🔐 Authenticating with keychain for $atSign');
+    
+    final atClientPreference = AtClientPreference()
+      ..rootDomain = 'root.atsign.org'
+      ..namespace = 'personalagent'
+      ..hiveStoragePath = (await getApplicationSupportDirectory()).path
+      ..commitLogPath = (await getApplicationSupportDirectory()).path
+      ..isLocalStoreRequired = true;
+
+    // Use the onboarding service to authenticate with keychain
+    final result = await AtOnboarding.onboard(
+      context: context,
+      config: AtOnboardingConfig(
+        atClientPreference: atClientPreference,
+        rootEnvironment: RootEnvironment.Production,
+        domain: 'root.atsign.org',
+        appAPIKey: 'personalagent',
+      ),
+    );
+
+    if (result.status != AtOnboardingResultStatus.success) {
+      throw Exception('Authentication failed: ${result.message}');
+    }
+    
+    debugPrint('✅ Authenticated successfully with keychain');
   }
 
   @override

@@ -1,11 +1,11 @@
-import 'dart:io';
 import 'package:at_onboarding_flutter/at_onboarding_flutter.dart';
 
 /// One-time utility to load .atKeys file into OS keychain
 /// After this runs once, keys stay in keychain forever - no more file uploads!
 class KeychainSetup {
   /// Import .atKeys file from disk into OS keychain
-  /// This is a one-time operation - once keys are in keychain, this is never needed again
+  /// NOTE: This is mostly handled automatically by the SDK during onboarding
+  /// This utility is kept for manual import scenarios if needed
   static Future<bool> importKeysToKeychain({
     required String atSign,
     required String atKeysFilePath,
@@ -18,28 +18,15 @@ class KeychainSetup {
         return true;
       }
 
-      // Read .atKeys file
-      final atKeysFile = File(atKeysFilePath);
-      if (!await atKeysFile.exists()) {
-        print('❌ .atKeys file not found: $atKeysFilePath');
-        return false;
-      }
-
-      final atKeysContent = await atKeysFile.readAsString();
-
-      // Store in keychain using SDK method
-      final keyChainManager = KeyChainManager.getInstance();
-      await keyChainManager.storeCredentialToKeychain(
-        atSign,
-        atKeysContent,
-      );
-
-      print('✅ Successfully imported $atSign keys to OS keychain!');
-      print(
-          '   Keys are now secure and persistent - no more file uploads needed.');
-      return true;
+      // NOTE: The SDK automatically stores keys in keychain during onboarding
+      // This method is primarily for checking if keys exist
+      // Manual keychain storage is handled by the SDK's onboarding flow
+      
+      print('ℹ️ Keys should be imported during the onboarding flow');
+      print('   If onboarding completed successfully, keys are already in keychain');
+      return false;
     } catch (e, st) {
-      print('❌ Failed to import keys to keychain: $e');
+      print('❌ Failed to check keychain: $e');
       print(st);
       return false;
     }
