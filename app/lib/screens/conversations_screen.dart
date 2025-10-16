@@ -47,7 +47,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     });
   }
 
-  Future<void> _deleteSelected(BuildContext context, AgentProvider agent) async {
+  Future<void> _deleteSelected(
+      BuildContext context, AgentProvider agent) async {
     if (_selectedIds.isEmpty) return;
 
     final count = _selectedIds.length;

@@ -323,34 +323,6 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-          Consumer<AgentProvider>(
-            builder: (context, agent, _) {
-              if (agent.isProcessing) {
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  color: Theme.of(context).colorScheme.surfaceVariant,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Agent is thinking...',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
           InputField(controller: _textController, onSend: _sendMessage),
         ],
       ),
