@@ -250,18 +250,28 @@ See [app/README.md](app/README.md) for detailed documentation.
 Edit `agent/.env`:
 
 ```env
-# Required
-AT_SIGN=@your_agent
-AT_KEYS_FILE_PATH=./keys/@your_agent_key.atKeys
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama2
+# atPlatform Configuration - REQUIRED
+AT_SIGN=@your_agent                                    # Your agent's @sign from https://atsign.com
+AT_KEYS_FILE_PATH=./keys/@your_agent_key.atKeys       # Path to your agent's .atKeys file
+AT_ROOT_SERVER=root.atsign.org                         # atPlatform root server
 
-# Optional (for hybrid mode)
-CLAUDE_API_KEY=your_api_key_here
-CLAUDE_MODEL=claude-3-5-sonnet-20241022
+# Authorized Users - OPTIONAL
+ALLOWED_USERS=                                          # Comma-separated @signs allowed to use agent
+                                                        # Example: @alice,@bob
+                                                        # Leave empty to allow all @signs
 
-# Tuning
-PRIVACY_THRESHOLD=0.7  # 0.0-1.0, higher = more local processing
+# Ollama Configuration - REQUIRED
+OLLAMA_HOST=http://localhost:11434                      # Ollama server URL
+OLLAMA_MODEL=llama3.2                                   # Model to use (llama2, llama3.2, etc.)
+
+# Claude API Configuration - OPTIONAL (for hybrid mode)
+CLAUDE_API_KEY=your_api_key_here                        # Get from https://console.anthropic.com
+CLAUDE_MODEL=claude-sonnet-4-5-20250929                 # Claude model version
+
+# Agent Configuration - OPTIONAL
+AGENT_NAME=                                             # Display name for agent (useful for multiple agents)
+PRIVACY_THRESHOLD=0.7                                   # 0.0-1.0, higher = more local processing
+MAX_CONTEXT_SIZE=4096                                   # Maximum context window size
 ```
 
 ## 📊 Performance & Cost

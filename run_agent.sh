@@ -109,6 +109,16 @@ else
     echo ""
 fi
 
+# Generate JSON serialization code
+echo -e "${BLUE}🔧 Generating JSON serialization code...${NC}"
+dart run build_runner build --delete-conflicting-outputs > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Code generation complete${NC}"
+else
+    echo -e "${YELLOW}⚠️  Code generation had warnings (this is usually okay)${NC}"
+fi
+echo ""
+
 # Start the agent
 echo -e "${BLUE}🚀 Starting agent...${NC}"
 echo ""

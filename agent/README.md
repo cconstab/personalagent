@@ -124,14 +124,17 @@ dart run build_runner build
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `AT_SIGN` | Yes | - | Your @sign for agent identity |
-| `AT_KEYS_FILE_PATH` | Yes | - | Path to atKeys file |
+| `AT_SIGN` | Yes | - | Your agent's @sign from https://atsign.com |
+| `AT_KEYS_FILE_PATH` | Yes | - | Path to your agent's .atKeys file |
 | `AT_ROOT_SERVER` | No | `root.atsign.org` | atPlatform root server |
+| `ALLOWED_USERS` | No | - | Comma-separated @signs allowed to use agent (empty = allow all) |
+| `AGENT_NAME` | No | - | Display name for agent (useful when running multiple agents) |
 | `OLLAMA_HOST` | No | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | No | `llama2` | Ollama model to use |
-| `CLAUDE_API_KEY` | No | - | Claude API key (optional) |
-| `CLAUDE_MODEL` | No | `claude-3-5-sonnet-20241022` | Claude model |
-| `PRIVACY_THRESHOLD` | No | `0.7` | Confidence threshold for local processing |
+| `OLLAMA_MODEL` | No | `llama3.2` | Ollama model to use (llama2, llama3.2, etc.) |
+| `CLAUDE_API_KEY` | No | - | Claude API key for hybrid mode (optional) |
+| `CLAUDE_MODEL` | No | `claude-sonnet-4-5-20250929` | Claude model version |
+| `PRIVACY_THRESHOLD` | No | `0.7` | Confidence threshold (0.0-1.0) for local processing |
+| `MAX_CONTEXT_SIZE` | No | `4096` | Maximum context window size |
 
 ## Development
 

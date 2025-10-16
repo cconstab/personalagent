@@ -4,7 +4,7 @@ version: 0.1.0
 publish_to: none
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: '>=3.8.0 <4.0.0'
 
 dependencies:
   # atPlatform SDK for encrypted communication and storage
@@ -17,7 +17,7 @@ dependencies:
   http: ^1.1.0
   
   # JSON handling
-  json_annotation: ^4.8.1
+  json_annotation: ^4.9.0
   
   # Environment variables
   dotenv: ^4.2.0
