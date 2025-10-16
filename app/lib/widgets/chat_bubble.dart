@@ -59,13 +59,43 @@ class ChatBubble extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (!isUser && message.agentName != null) ...[
-                        Text(
-                          message.agentName!,
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                        Row(
+                          children: [
+                            Text(
+                              message.agentName!,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(
                                     color: colorScheme.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
+                            ),
+                            if (message.model != null) ...[
+                              Text(
+                                ' • ',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                              ),
+                              Flexible(
+                                child: Text(
+                                  message.model!,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 4),
                       ],

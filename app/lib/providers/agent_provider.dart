@@ -27,7 +27,6 @@ class AgentProvider extends ChangeNotifier {
   bool get isProcessing => _isProcessing;
   String? get agentAtSign => _agentAtSign;
   bool get useOllamaOnly => _useOllamaOnly;
-
   AgentProvider() {
     _loadSettings();
     _loadConversations();

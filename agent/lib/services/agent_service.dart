@@ -93,6 +93,7 @@ class AgentService {
           timestamp: DateTime.now(),
           wasPrivacyFiltered: false,
           agentName: agentName,
+          model: ollama.model,
         );
         await atPlatform.sendResponse(query.userId, errorResponse);
       } catch (sendError) {
@@ -181,6 +182,7 @@ class AgentService {
         source: ResponseSource.ollama,
         confidenceScore: 0.0,
         agentName: agentName,
+        model: ollama.model,
       );
     }
   }
@@ -281,6 +283,7 @@ Respond naturally and conversationally.
       wasPrivacyFiltered: false,
       confidenceScore: 1.0,
       agentName: agentName,
+      model: ollama.model,
     );
   }
 
@@ -374,6 +377,7 @@ ${claudeResponse.content}
       wasPrivacyFiltered: true,
       confidenceScore: analysis.confidence,
       agentName: agentName,
+      model: '${ollama.model} + ${claude!.model}',
     );
   }
 

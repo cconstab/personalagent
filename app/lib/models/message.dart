@@ -9,6 +9,7 @@ class ChatMessage {
   final bool wasPrivacyFiltered;
   final bool isError;
   final String? agentName;
+  final String? model;
 
   ChatMessage({
     required this.id,
@@ -19,6 +20,7 @@ class ChatMessage {
     this.wasPrivacyFiltered = false,
     this.isError = false,
     this.agentName,
+    this.model,
   });
 
   Map<String, dynamic> toJson() => {
@@ -30,6 +32,7 @@ class ChatMessage {
         'wasPrivacyFiltered': wasPrivacyFiltered,
         'isError': isError,
         if (agentName != null) 'agentName': agentName,
+        if (model != null) 'model': model,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -47,6 +50,7 @@ class ChatMessage {
       wasPrivacyFiltered: json['wasPrivacyFiltered'] as bool? ?? false,
       isError: json['isError'] as bool? ?? false,
       agentName: json['agentName'] as String?,
+      model: json['model'] as String?,
     );
   }
 }
