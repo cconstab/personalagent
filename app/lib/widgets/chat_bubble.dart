@@ -101,43 +101,51 @@ class ChatBubble extends StatelessWidget {
                       ],
                       // Use Markdown for agent responses, SelectableText for user messages
                       if (!isUser)
-                        MarkdownBody(
-                          data: message.content,
-                          selectable: true,
-                          styleSheet: MarkdownStyleSheet(
-                            p: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: message.isError
-                                      ? colorScheme.onErrorContainer
-                                      : colorScheme.onSurfaceVariant,
-                                ),
-                            strong: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: message.isError
-                                      ? colorScheme.onErrorContainer
-                                      : colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                            em: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: message.isError
-                                      ? colorScheme.onErrorContainer
-                                      : colorScheme.onSurfaceVariant,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                            listBullet: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: message.isError
-                                      ? colorScheme.onErrorContainer
-                                      : colorScheme.onSurfaceVariant,
-                                ),
-                            code:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            MarkdownBody(
+                              data: message.content,
+                              selectable: true,
+                              styleSheet: MarkdownStyleSheet(
+                                p: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: message.isError
+                                          ? colorScheme.onErrorContainer
+                                          : colorScheme.onSurfaceVariant,
+                                    ),
+                                strong: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: message.isError
+                                          ? colorScheme.onErrorContainer
+                                          : colorScheme.onSurfaceVariant,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                em: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: message.isError
+                                          ? colorScheme.onErrorContainer
+                                          : colorScheme.onSurfaceVariant,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                listBullet: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: message.isError
+                                          ? colorScheme.onErrorContainer
+                                          : colorScheme.onSurfaceVariant,
+                                    ),
+                                code: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
                                       color: message.isError
                                           ? colorScheme.onErrorContainer
                                           : colorScheme.onSurfaceVariant,
@@ -145,13 +153,46 @@ class ChatBubble extends StatelessWidget {
                                       backgroundColor:
                                           colorScheme.surface.withOpacity(0.3),
                                     ),
-                          ),
-                          onTapLink: (text, href, title) {
-                            if (href != null) {
-                              launchUrl(Uri.parse(href),
-                                  mode: LaunchMode.externalApplication);
-                            }
-                          },
+                              ),
+                              onTapLink: (text, href, title) {
+                                if (href != null) {
+                                  launchUrl(Uri.parse(href),
+                                      mode: LaunchMode.externalApplication);
+                                }
+                              },
+                            ),
+                            // Show streaming indicator for partial messages
+                            if (message.isPartial) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color:
+                                          colorScheme.primary.withOpacity(0.6),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    message.content.isEmpty
+                                        ? 'Thinking...'
+                                        : 'Streaming...',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: colorScheme.onSurfaceVariant
+                                              .withOpacity(0.7),
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
                         )
                       else
                         SelectableText(

@@ -11,6 +11,12 @@ class ChatMessage {
   final String? agentName;
   final String? model;
 
+  /// Whether this is a partial response being streamed
+  final bool isPartial;
+
+  /// Sequence number for ordering streaming chunks
+  final int? chunkIndex;
+
   ChatMessage({
     required this.id,
     required this.content,
@@ -21,6 +27,8 @@ class ChatMessage {
     this.isError = false,
     this.agentName,
     this.model,
+    this.isPartial = false,
+    this.chunkIndex,
   });
 
   Map<String, dynamic> toJson() => {
@@ -33,6 +41,8 @@ class ChatMessage {
         'isError': isError,
         if (agentName != null) 'agentName': agentName,
         if (model != null) 'model': model,
+        'isPartial': isPartial,
+        if (chunkIndex != null) 'chunkIndex': chunkIndex,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -51,6 +61,29 @@ class ChatMessage {
       isError: json['isError'] as bool? ?? false,
       agentName: json['agentName'] as String?,
       model: json['model'] as String?,
+      isPartial: json['isPartial'] as bool? ?? false,
+      chunkIndex: json['chunkIndex'] as int?,
+    );
+  }
+
+  /// Create a copy of this message with updated content (for streaming)
+  ChatMessage copyWith({
+    String? content,
+    bool? isPartial,
+    int? chunkIndex,
+  }) {
+    return ChatMessage(
+      id: id,
+      content: content ?? this.content,
+      isUser: isUser,
+      timestamp: timestamp,
+      source: source,
+      wasPrivacyFiltered: wasPrivacyFiltered,
+      isError: isError,
+      agentName: agentName,
+      model: model,
+      isPartial: isPartial ?? this.isPartial,
+      chunkIndex: chunkIndex ?? this.chunkIndex,
     );
   }
 }

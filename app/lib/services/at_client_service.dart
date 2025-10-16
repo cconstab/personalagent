@@ -198,11 +198,18 @@ class AtClientService {
         wasPrivacyFiltered: responseData['wasPrivacyFiltered'] ?? false,
         agentName: responseData['agentName'] as String?,
         model: responseData['model'] as String?,
+        isPartial: responseData['metadata']?['isPartial'] ?? false,
+        chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
       );
 
       // Emit the message to listeners
       _messageController.add(message);
-      debugPrint('Agent response received and emitted');
+      if (message.isPartial) {
+        debugPrint(
+            '📦 Streaming chunk ${message.chunkIndex} received for ${message.id}');
+      } else {
+        debugPrint('✅ Final message received for ${message.id}');
+      }
     } catch (e, stackTrace) {
       debugPrint('Failed to handle notification: $e');
       debugPrint('StackTrace: $stackTrace');

@@ -18,7 +18,7 @@ class ClaudeService {
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
-  /// Query Claude with sanitized input (no personal information)
+  /// Query Claude with sanitized input (no personal information) - non-streaming
   Future<ClaudeResponse> query({
     required String sanitizedQuery,
     double temperature = 0.7,
@@ -70,6 +70,85 @@ class ClaudeService {
     }
   }
 
+  /// Query Claude with streaming - yields content deltas as they arrive
+  Stream<ClaudeStreamChunk> queryStream({
+    required String sanitizedQuery,
+    double temperature = 0.7,
+    int maxTokens = 1024,
+  }) async* {
+    try {
+      _logger.info('Querying Claude with streaming');
+
+      final request = http.Request('POST', Uri.parse(_apiUrl));
+      request.headers['Content-Type'] = 'application/json';
+      request.headers['x-api-key'] = apiKey;
+      request.headers['anthropic-version'] = _apiVersion;
+      request.body = json.encode({
+        'model': model,
+        'max_tokens': maxTokens,
+        'temperature': temperature,
+        'stream': true, // Enable streaming
+        'messages': [
+          {
+            'role': 'user',
+            'content': sanitizedQuery,
+          }
+        ],
+      });
+
+      final streamedResponse = await _httpClient.send(request);
+
+      if (streamedResponse.statusCode != 200) {
+        throw Exception('Claude API error: ${streamedResponse.statusCode}');
+      }
+
+      // Claude streaming returns Server-Sent Events (SSE) format
+      String buffer = '';
+      await for (final chunk
+          in streamedResponse.stream.transform(utf8.decoder)) {
+        buffer += chunk;
+
+        // Process complete SSE events (lines starting with "data: ")
+        while (buffer.contains('\n')) {
+          final newlineIndex = buffer.indexOf('\n');
+          final line = buffer.substring(0, newlineIndex).trim();
+          buffer = buffer.substring(newlineIndex + 1);
+
+          if (line.isEmpty || !line.startsWith('data: ')) continue;
+
+          final data = line.substring(6); // Remove "data: " prefix
+
+          try {
+            final jsonData = json.decode(data);
+            final type = jsonData['type'];
+
+            if (type == 'content_block_delta') {
+              // Extract the text delta
+              final delta = jsonData['delta'];
+              if (delta['type'] == 'text_delta') {
+                yield ClaudeStreamChunk(
+                  content: delta['text'] ?? '',
+                  done: false,
+                );
+              }
+            } else if (type == 'message_stop') {
+              // Final event - no more content
+              yield ClaudeStreamChunk(
+                content: '',
+                done: true,
+              );
+            }
+          } catch (e) {
+            _logger.warning('Failed to parse streaming chunk: $line', e);
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to query Claude with streaming', e, stackTrace);
+      rethrow;
+    }
+  }
+
   /// Verify API key is valid
   Future<bool> verifyApiKey() async {
     try {
@@ -98,6 +177,17 @@ class ClaudeResponse {
     required this.content,
     required this.stopReason,
     required this.usage,
+  });
+}
+
+/// Streaming chunk from Claude
+class ClaudeStreamChunk {
+  final String content; // Partial content delta
+  final bool done; // True on final chunk
+
+  ClaudeStreamChunk({
+    required this.content,
+    required this.done,
   });
 }
 

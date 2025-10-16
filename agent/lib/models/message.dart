@@ -81,6 +81,12 @@ class ResponseMessage extends AgentMessage {
   final String? agentName;
   final String? model;
 
+  /// Whether this is a partial response (streaming in progress)
+  final bool isPartial;
+
+  /// Sequence number for ordering streaming chunks
+  final int? chunkIndex;
+
   ResponseMessage({
     required String id,
     required String content,
@@ -89,6 +95,8 @@ class ResponseMessage extends AgentMessage {
     this.confidenceScore = 1.0,
     this.agentName,
     this.model,
+    this.isPartial = false,
+    this.chunkIndex,
     DateTime? timestamp,
   }) : super(
           id: id,
@@ -101,6 +109,8 @@ class ResponseMessage extends AgentMessage {
             'confidenceScore': confidenceScore,
             if (agentName != null) 'agentName': agentName,
             if (model != null) 'model': model,
+            'isPartial': isPartial,
+            if (chunkIndex != null) 'chunkIndex': chunkIndex,
           },
         );
 

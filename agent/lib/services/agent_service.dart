@@ -266,24 +266,75 @@ Respond naturally and conversationally.
     promptBuffer.write('User: ${query.content}');
 
     _logger.info(
-        '🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"})');
+        '🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming');
 
-    final response = await ollama.generate(
+    // Stream the response and send incremental updates
+    // Use batching to reduce atPlatform notification overhead
+    final StringBuffer fullResponse = StringBuffer();
+    int chunkIndex = 0;
+    DateTime lastSendTime = DateTime.now();
+    const sendIntervalMs = 500; // Send updates every 500ms max
+    const minCharsBeforeSend = 50; // Or every 50 characters
+    int charsSinceLastSend = 0;
+
+    await for (final chunk in ollama.generateStream(
       prompt: promptBuffer.toString(),
       context:
           null, // Don't use stored context - regenerate from history each time
-    );
+    )) {
+      if (chunk.response.isNotEmpty) {
+        fullResponse.write(chunk.response);
+        charsSinceLastSend += chunk.response.length;
 
-    // Note: No context storage - app maintains conversation history
+        final timeSinceLastSend =
+            DateTime.now().difference(lastSendTime).inMilliseconds;
+        final shouldSend = chunk.done ||
+            charsSinceLastSend >= minCharsBeforeSend ||
+            timeSinceLastSend >= sendIntervalMs;
 
+        if (shouldSend) {
+          // Send partial response update
+          final partialMessage = ResponseMessage(
+            id: query.id,
+            content: fullResponse.toString(),
+            source: ResponseSource.ollama,
+            wasPrivacyFiltered: false,
+            confidenceScore: 1.0,
+            agentName: agentName,
+            model: ollama.model,
+            isPartial: !chunk.done,
+            chunkIndex: chunkIndex++,
+          );
+
+          _logger.info(
+              '📤 Sending ${chunk.done ? 'FINAL' : 'PARTIAL'} chunk #$chunkIndex (${fullResponse.length} chars, isPartial: ${!chunk.done})');
+
+          // Fire-and-forget for better performance (don't await)
+          atPlatform.sendResponse(query.userId, partialMessage).catchError((e) {
+            _logger.warning('Failed to send streaming chunk: $e');
+          });
+
+          lastSendTime = DateTime.now();
+          charsSinceLastSend = 0;
+
+          if (chunk.done) {
+            _logger.info(
+                '✅ Streaming complete. Sent ${chunkIndex} batched updates.');
+          }
+        }
+      }
+    }
+
+    // Return final complete message
     return ResponseMessage(
       id: query.id,
-      content: response.response,
+      content: fullResponse.toString(),
       source: ResponseSource.ollama,
       wasPrivacyFiltered: false,
       confidenceScore: 1.0,
       agentName: agentName,
       model: ollama.model,
+      isPartial: false,
     );
   }
 
@@ -324,18 +375,26 @@ Respond naturally and conversationally.
     final sanitizedQuery = await ollama.sanitizeQuery(query.content, context);
     _logger.info('Sanitized query: $sanitizedQuery');
 
-    // Step 2: Get general knowledge from Claude (include recent conversation context)
+    // Step 2: Get general knowledge from Claude with streaming (include recent conversation context)
     final claudePrompt = conversationContext.isNotEmpty
         ? 'Recent conversation:\n$conversationContext\nUser: $sanitizedQuery'
         : sanitizedQuery;
 
-    final claudeResponse = await claude!.query(
+    _logger.info('🌐 Streaming response from Claude...');
+    final StringBuffer claudeFullResponse = StringBuffer();
+    await for (final chunk in claude!.queryStream(
       sanitizedQuery: claudePrompt,
-    );
-    _logger.info(
-        'Received response from Claude (${claudeResponse.usage.totalTokens} tokens)');
+    )) {
+      claudeFullResponse.write(chunk.content);
+      if (chunk.done) {
+        _logger.info('✅ Claude streaming complete');
+      }
+    }
 
-    // Step 3: Combine Claude's knowledge with user context using Ollama
+    final claudeResponseContent = claudeFullResponse.toString();
+    _logger.info('Received complete response from Claude');
+
+    // Step 3: Combine Claude's knowledge with user context using Ollama with streaming
     // Build full prompt including conversation history
     final StringBuffer promptBuffer = StringBuffer();
 
@@ -346,7 +405,7 @@ User's Personal Information:
 $context
 
 General knowledge to help answer:
-${claudeResponse.content}
+$claudeResponseContent
 
 ''');
     } else {
@@ -358,26 +417,74 @@ ${claudeResponse.content}
             .write('${role == 'user' ? 'User' : 'Assistant'}: $content\n');
       }
       promptBuffer.write(
-          '\nGeneral knowledge to help answer:\n${claudeResponse.content}\n\n');
+          '\nGeneral knowledge to help answer:\n$claudeResponseContent\n\n');
     }
 
     promptBuffer.write('User: ${query.content}');
 
-    final finalResponse = await ollama.generate(
+    // Stream Ollama's final synthesis with batching
+    _logger.info('🤖 Synthesizing final response with Ollama streaming...');
+    final StringBuffer fullResponse = StringBuffer();
+    int chunkIndex = 0;
+    DateTime lastSendTime = DateTime.now();
+    const sendIntervalMs = 500; // Send updates every 500ms max
+    const minCharsBeforeSend = 50; // Or every 50 characters
+    int charsSinceLastSend = 0;
+
+    await for (final chunk in ollama.generateStream(
       prompt: promptBuffer.toString(),
       context: null, // Don't use stored context - regenerate from history
-    );
+    )) {
+      if (chunk.response.isNotEmpty) {
+        fullResponse.write(chunk.response);
+        charsSinceLastSend += chunk.response.length;
 
-    // Note: No context storage - app maintains conversation history
+        final timeSinceLastSend =
+            DateTime.now().difference(lastSendTime).inMilliseconds;
+        final shouldSend = chunk.done ||
+            charsSinceLastSend >= minCharsBeforeSend ||
+            timeSinceLastSend >= sendIntervalMs;
 
+        if (shouldSend) {
+          // Send partial response update
+          final partialMessage = ResponseMessage(
+            id: query.id,
+            content: fullResponse.toString(),
+            source: ResponseSource.hybrid,
+            wasPrivacyFiltered: true,
+            confidenceScore: analysis.confidence,
+            agentName: agentName,
+            model: '${ollama.model} + ${claude!.model}',
+            isPartial: !chunk.done,
+            chunkIndex: chunkIndex++,
+          );
+
+          // Fire-and-forget for better performance (don't await)
+          atPlatform.sendResponse(query.userId, partialMessage).catchError((e) {
+            _logger.warning('Failed to send streaming chunk: $e');
+          });
+
+          lastSendTime = DateTime.now();
+          charsSinceLastSend = 0;
+
+          if (chunk.done) {
+            _logger.info(
+                '✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates.');
+          }
+        }
+      }
+    }
+
+    // Return final complete message
     return ResponseMessage(
       id: query.id,
-      content: finalResponse.response,
+      content: fullResponse.toString(),
       source: ResponseSource.hybrid,
       wasPrivacyFiltered: true,
       confidenceScore: analysis.confidence,
       agentName: agentName,
       model: '${ollama.model} + ${claude!.model}',
+      isPartial: false,
     );
   }
 

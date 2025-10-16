@@ -15,7 +15,7 @@ class OllamaService {
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
-  /// Generate a response from Ollama
+  /// Generate a response from Ollama (non-streaming)
   Future<OllamaResponse> generate({
     required String prompt,
     List<int>? context,
@@ -60,6 +60,79 @@ class OllamaService {
       );
     } catch (e, stackTrace) {
       _logger.severe('Failed to generate Ollama response', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Generate a streaming response from Ollama
+  /// Yields partial responses as they arrive from the LLM
+  Stream<OllamaStreamChunk> generateStream({
+    required String prompt,
+    List<int>? context,
+    double temperature = 0.7,
+  }) async* {
+    try {
+      _logger.info('Generating streaming response with Ollama ($model)');
+
+      final body = {
+        'model': model,
+        'prompt': prompt,
+        'stream': true, // Enable streaming
+        'options': {
+          'temperature': temperature,
+        },
+      };
+
+      // Include context if provided (for conversation continuity)
+      if (context != null && context.isNotEmpty) {
+        body['context'] = context;
+      }
+
+      final request = http.Request('POST', Uri.parse('$host/api/generate'));
+      request.headers['Content-Type'] = 'application/json';
+      request.body = json.encode(body);
+
+      final streamedResponse = await _httpClient.send(request);
+
+      if (streamedResponse.statusCode != 200) {
+        throw Exception('Ollama API error: ${streamedResponse.statusCode}');
+      }
+
+      // Ollama streaming returns newline-delimited JSON objects
+      String buffer = '';
+      await for (final chunk
+          in streamedResponse.stream.transform(utf8.decoder)) {
+        buffer += chunk;
+
+        // Process complete JSON lines
+        while (buffer.contains('\n')) {
+          final newlineIndex = buffer.indexOf('\n');
+          final line = buffer.substring(0, newlineIndex).trim();
+          buffer = buffer.substring(newlineIndex + 1);
+
+          if (line.isEmpty) continue;
+
+          try {
+            final jsonData = json.decode(line);
+            yield OllamaStreamChunk(
+              response: jsonData['response'] ?? '',
+              done: jsonData['done'] ?? false,
+              context: jsonData['done'] == true
+                  ? (jsonData['context'] as List<dynamic>?)?.cast<int>() ?? []
+                  : null,
+              totalDuration: jsonData['total_duration'],
+              loadDuration: jsonData['load_duration'],
+              promptEvalCount: jsonData['prompt_eval_count'],
+              evalCount: jsonData['eval_count'],
+            );
+          } catch (e) {
+            _logger.warning('Failed to parse streaming chunk: $line', e);
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.severe(
+          'Failed to generate streaming Ollama response', e, stackTrace);
       rethrow;
     }
   }
@@ -178,6 +251,27 @@ class OllamaResponse {
   });
 
   double get tokensPerSecond => evalCount / (totalDuration / 1000000000.0);
+}
+
+/// Streaming chunk from Ollama
+class OllamaStreamChunk {
+  final String response; // Partial response text
+  final bool done; // True on final chunk
+  final List<int>? context; // Only available on final chunk
+  final int? totalDuration;
+  final int? loadDuration;
+  final int? promptEvalCount;
+  final int? evalCount;
+
+  OllamaStreamChunk({
+    required this.response,
+    required this.done,
+    this.context,
+    this.totalDuration,
+    this.loadDuration,
+    this.promptEvalCount,
+    this.evalCount,
+  });
 }
 
 class AnalysisResult {
