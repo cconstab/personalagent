@@ -4,14 +4,137 @@ import 'package:intl/intl.dart';
 import '../providers/agent_provider.dart';
 import '../models/conversation.dart';
 
-class ConversationsScreen extends StatelessWidget {
+class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
+
+  @override
+  State<ConversationsScreen> createState() => _ConversationsScreenState();
+}
+
+class _ConversationsScreenState extends State<ConversationsScreen> {
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _selectionMode = !_selectionMode;
+      if (!_selectionMode) {
+        _selectedIds.clear();
+      }
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _selectAll(List<Conversation> conversations) {
+    setState(() {
+      _selectedIds.clear();
+      _selectedIds.addAll(conversations.map((c) => c.id));
+    });
+  }
+
+  void _deselectAll() {
+    setState(() {
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _deleteSelected(BuildContext context, AgentProvider agent) async {
+    if (_selectedIds.isEmpty) return;
+
+    final count = _selectedIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Conversations'),
+        content: Text(
+          'Are you sure you want to delete $count conversation${count == 1 ? '' : 's'}?\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      // Delete all selected conversations
+      for (final id in _selectedIds.toList()) {
+        await agent.deleteConversation(id);
+      }
+      _toggleSelectionMode();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Conversations'),
+        title: _selectionMode
+            ? Text('${_selectedIds.length} selected')
+            : const Text('Conversations'),
+        leading: _selectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _toggleSelectionMode,
+              )
+            : null,
+        actions: [
+          if (_selectionMode) ...[
+            Consumer<AgentProvider>(
+              builder: (context, agent, _) {
+                final allSelected =
+                    _selectedIds.length == agent.conversations.length;
+                return IconButton(
+                  icon: Icon(
+                    allSelected ? Icons.deselect : Icons.select_all,
+                  ),
+                  onPressed: () {
+                    if (allSelected) {
+                      _deselectAll();
+                    } else {
+                      _selectAll(agent.conversations);
+                    }
+                  },
+                  tooltip: allSelected ? 'Deselect All' : 'Select All',
+                );
+              },
+            ),
+            Consumer<AgentProvider>(
+              builder: (context, agent, _) {
+                return IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: _selectedIds.isEmpty
+                      ? null
+                      : () => _deleteSelected(context, agent),
+                  tooltip: 'Delete Selected',
+                );
+              },
+            ),
+          ] else
+            IconButton(
+              icon: const Icon(Icons.checklist),
+              onPressed: _toggleSelectionMode,
+              tooltip: 'Select',
+            ),
+        ],
       ),
       body: Consumer<AgentProvider>(
         builder: (context, agent, _) {
@@ -58,13 +181,20 @@ class ConversationsScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final conversation = agent.conversations[index];
               final isActive = agent.currentConversation?.id == conversation.id;
+              final isSelected = _selectedIds.contains(conversation.id);
 
               return _ConversationTile(
                 conversation: conversation,
                 isActive: isActive,
+                selectionMode: _selectionMode,
+                isSelected: isSelected,
                 onTap: () {
-                  agent.switchConversation(conversation.id);
-                  Navigator.pop(context);
+                  if (_selectionMode) {
+                    _toggleSelection(conversation.id);
+                  } else {
+                    agent.switchConversation(conversation.id);
+                    Navigator.pop(context);
+                  }
                 },
                 onDelete: () {
                   _showDeleteConfirmation(context, agent, conversation);
@@ -168,6 +298,8 @@ class ConversationsScreen extends StatelessWidget {
 class _ConversationTile extends StatelessWidget {
   final Conversation conversation;
   final bool isActive;
+  final bool selectionMode;
+  final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback onRename;
@@ -175,6 +307,8 @@ class _ConversationTile extends StatelessWidget {
   const _ConversationTile({
     required this.conversation,
     required this.isActive,
+    required this.selectionMode,
+    required this.isSelected,
     required this.onTap,
     required this.onDelete,
     required this.onRename,
@@ -188,19 +322,28 @@ class _ConversationTile extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      color: isActive ? Theme.of(context).colorScheme.primaryContainer : null,
+      color: isSelected
+          ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
+          : isActive
+              ? Theme.of(context).colorScheme.primaryContainer
+              : null,
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: isActive
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.secondaryContainer,
-          child: Icon(
-            Icons.chat,
-            color: isActive
-                ? Theme.of(context).colorScheme.onPrimary
-                : Theme.of(context).colorScheme.onSecondaryContainer,
-          ),
-        ),
+        leading: selectionMode
+            ? Checkbox(
+                value: isSelected,
+                onChanged: (_) => onTap(),
+              )
+            : CircleAvatar(
+                backgroundColor: isActive
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.secondaryContainer,
+                child: Icon(
+                  Icons.chat,
+                  color: isActive
+                      ? Theme.of(context).colorScheme.onPrimary
+                      : Theme.of(context).colorScheme.onSecondaryContainer,
+                ),
+              ),
         title: Text(
           conversation.title,
           maxLines: 1,
@@ -213,40 +356,42 @@ class _ConversationTile extends StatelessWidget {
           '$messageCount message${messageCount == 1 ? '' : 's'} • $timeAgo',
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) {
-            switch (value) {
-              case 'rename':
-                onRename();
-                break;
-              case 'delete':
-                onDelete();
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'rename',
-              child: Row(
-                children: [
-                  Icon(Icons.edit, size: 20),
-                  SizedBox(width: 8),
-                  Text('Rename'),
+        trailing: selectionMode
+            ? null
+            : PopupMenuButton<String>(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'rename':
+                      onRename();
+                      break;
+                    case 'delete':
+                      onDelete();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20),
+                        SizedBox(width: 8),
+                        Text('Rename'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20),
+                        SizedBox(width: 8),
+                        Text('Delete'),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, size: 20),
-                  SizedBox(width: 8),
-                  Text('Delete'),
-                ],
-              ),
-            ),
-          ],
-        ),
         onTap: onTap,
       ),
     );
