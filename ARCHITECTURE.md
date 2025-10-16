@@ -18,22 +18,22 @@ This document provides a comprehensive overview of the Private AI Agent architec
 The system consists of two main applications communicating via the atPlatform:
 
 ```mermaid
-graph TB
-    subgraph "User's Device"
-        A[Flutter App<br/>Your @sign]
-        O[Ollama<br/>Local LLM]
+flowchart TB
+    subgraph Device["User's Device"]
+        A["Flutter App<br/>Your @sign"]
+        O["Ollama<br/>Local LLM"]
     end
     
-    subgraph "atPlatform Cloud"
-        AP[atServer<br/>End-to-End Encrypted]
+    subgraph Cloud["atPlatform Cloud"]
+        AP["atServer<br/>End-to-End Encrypted"]
     end
     
-    subgraph "Agent Server"
-        B[Agent Service<br/>Agent @sign]
+    subgraph Server["Agent Server"]
+        B["Agent Service<br/>Agent @sign"]
     end
     
-    subgraph "External Services"
-        C[Claude API<br/>Sanitized Only]
+    subgraph External["External Services"]
+        C["Claude API<br/>Sanitized Only"]
     end
     
     A -->|1. Encrypted Query| AP
@@ -65,12 +65,12 @@ graph TB
 The cross-platform user interface built with Flutter.
 
 ```mermaid
-graph LR
-    subgraph "Flutter App Architecture"
-        UI[Screens<br/>Home, Settings, Onboarding]
-        PM[Providers<br/>State Management]
-        SV[Services<br/>atClient Communication]
-        MD[Models<br/>Data Structures]
+flowchart LR
+    subgraph App["Flutter App Architecture"]
+        UI["Screens<br/>Home, Settings, Onboarding"]
+        PM["Providers<br/>State Management"]
+        SV["Services<br/>atClient Communication"]
+        MD["Models<br/>Data Structures"]
         
         UI --> PM
         PM --> SV
@@ -103,12 +103,12 @@ graph LR
 The Dart backend that processes queries intelligently.
 
 ```mermaid
-graph TB
-    subgraph "Agent Service Architecture"
-        AP[AtPlatformService<br/>Notification Listener]
-        AS[AgentService<br/>Query Processor]
-        OS[OllamaService<br/>Local LLM]
-        CS[ClaudeService<br/>External LLM]
+flowchart TB
+    subgraph Agent["Agent Service Architecture"]
+        AP["AtPlatformService<br/>Notification Listener"]
+        AS["AgentService<br/>Query Processor"]
+        OS["OllamaService<br/>Local LLM"]
+        CS["ClaudeService<br/>External LLM"]
         
         AP -->|QueryMessage| AS
         AS -->|Analyze & Route| OS
@@ -227,23 +227,23 @@ sequenceDiagram
 ### Three-Tier Privacy Model
 
 ```mermaid
-graph TD
-    subgraph "Tier 1: Local Only (95% of Queries)"
-        T1[Personal Info<br/>Context-Based<br/>Simple Questions]
+flowchart TD
+    subgraph Tier1["Tier 1: Local Only - 95% of Queries"]
+        T1["Personal Info<br/>Context-Based<br/>Simple Questions"]
     end
     
-    subgraph "Tier 2: Hybrid Processing (5% of Queries)"
-        T2[External Knowledge Needed<br/>Personal Data Sanitized<br/>Generic Query to Claude]
+    subgraph Tier2["Tier 2: Hybrid Processing - 5% of Queries"]
+        T2["External Knowledge Needed<br/>Personal Data Sanitized<br/>Generic Query to Claude"]
     end
     
-    subgraph "Tier 3: Ollama-Only Mode (100% Local)"
-        T3[User-Enforced Privacy<br/>No External APIs Ever<br/>Slightly Reduced Capabilities]
+    subgraph Tier3["Tier 3: Ollama-Only Mode - 100% Local"]
+        T3["User-Enforced Privacy<br/>No External APIs Ever<br/>Slightly Reduced Capabilities"]
     end
     
     Q[User Query] --> D{Analysis}
     D -->|High Confidence| T1
     D -->|Need External| T2
-    Q2[User Query<br/>with Flag] --> T3
+    Q2["User Query<br/>with Flag"] --> T3
     
     T1 --> R1[Ollama Response]
     T2 --> R2[Ollama + Claude Response]
@@ -378,22 +378,22 @@ A user-controlled privacy feature that ensures 100% local processing.
 ### Architecture
 
 ```mermaid
-graph TB
-    subgraph "Settings UI"
-        SW[Toggle Switch<br/>"Use Ollama Only"]
+flowchart TB
+    subgraph UI["Settings UI"]
+        SW["Toggle Switch: Use Ollama Only"]
     end
     
-    subgraph "State Management"
+    subgraph State["State Management"]
         AP[AgentProvider]
         SP[SharedPreferences]
     end
     
-    subgraph "Communication"
+    subgraph Comm["Communication"]
         AC[AtClientService]
         JSON[QueryMessage JSON]
     end
     
-    subgraph "Agent Processing"
+    subgraph Agent["Agent Processing"]
         PS[AtPlatformService]
         AS[AgentService]
         OL[OllamaService]
@@ -473,25 +473,25 @@ Future<ResponseMessage> processQuery(QueryMessage query) async {
 ### Flutter App State Architecture
 
 ```mermaid
-graph TB
-    subgraph "UI Layer"
+flowchart TB
+    subgraph UI["UI Layer"]
         HS[HomeScreen]
         SS[SettingsScreen]
         OS[OnboardingScreen]
     end
     
-    subgraph "Provider Layer"
-        AP[AgentProvider<br/>Messages & Settings]
-        AUP[AuthProvider<br/>Authentication State]
+    subgraph Provider["Provider Layer"]
+        AP["AgentProvider<br/>Messages & Settings"]
+        AUP["AuthProvider<br/>Authentication State"]
     end
     
-    subgraph "Service Layer"
-        ACS[AtClientService<br/>Communication]
+    subgraph Service["Service Layer"]
+        ACS["AtClientService<br/>Communication"]
     end
     
-    subgraph "Persistence Layer"
-        SP[SharedPreferences<br/>Settings]
-        KC[Keychain<br/>Keys]
+    subgraph Persist["Persistence Layer"]
+        SP["SharedPreferences<br/>Settings"]
+        KC["Keychain<br/>Keys"]
     end
     
     HS --> AP
@@ -660,19 +660,19 @@ gantt
 ### Development Setup
 
 ```mermaid
-graph LR
-    subgraph "Developer Machine"
-        APP[Flutter App<br/>Hot Reload]
-        AGENT[Agent Service<br/>dart run]
-        OLLAMA[Ollama<br/>Docker/Local]
+flowchart LR
+    subgraph Dev["Developer Machine"]
+        APP["Flutter App<br/>Hot Reload"]
+        AGENT["Agent Service<br/>dart run"]
+        OLLAMA["Ollama<br/>Docker/Local"]
     end
     
-    subgraph "atPlatform Cloud"
-        ATS[atServer<br/>Dev Environment]
+    subgraph Cloud["atPlatform Cloud"]
+        ATS["atServer<br/>Dev Environment"]
     end
     
-    subgraph "External"
-        CLAUDE[Claude API<br/>Development Tier]
+    subgraph Ext["External"]
+        CLAUDE["Claude API<br/>Development Tier"]
     end
     
     APP <--> ATS
@@ -684,19 +684,19 @@ graph LR
 ### Production Deployment
 
 ```mermaid
-graph TB
-    subgraph "User Devices"
+flowchart TB
+    subgraph Users["User Devices"]
         IOS[iOS App]
         AND[Android App]
         WEB[Web App]
         DESK[Desktop App]
     end
     
-    subgraph "atPlatform Cloud"
-        ATS[atServer<br/>Production]
+    subgraph Cloud["atPlatform Cloud"]
+        ATS["atServer<br/>Production"]
     end
     
-    subgraph "Agent Infrastructure"
+    subgraph Infra["Agent Infrastructure"]
         LB[Load Balancer]
         A1[Agent Instance 1]
         A2[Agent Instance 2]
@@ -707,7 +707,7 @@ graph TB
         LB --> A3
     end
     
-    subgraph "LLM Services"
+    subgraph LLM["LLM Services"]
         OLL[Ollama Cluster]
         CL[Claude API<br/>Production]
     end
