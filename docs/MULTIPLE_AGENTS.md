@@ -6,6 +6,16 @@ This guide shows you how to run multiple agents with different names to distingu
 
 Each agent can have a custom name that appears in the chat interface, making it easy to identify which agent responded when running multiple agents.
 
+## Load Balancing with Mutex
+
+✨ **New Feature**: Agents now include an automatic mutex mechanism to ensure only one agent responds to each query when multiple agents share the same atSign. This enables:
+
+- **Load Balancing**: Distribute queries across multiple agent instances
+- **High Availability**: Redundancy - if one agent fails, others continue serving
+- **No Duplicate Responses**: Only one agent responds per query
+
+For detailed technical information, see [AGENT_MUTEX.md](AGENT_MUTEX.md).
+
 ## Starting an Agent with a Name
 
 ### Option 1: Using the `-n` flag
@@ -28,9 +38,32 @@ Then start normally:
 
 ## Running Multiple Agents
 
-To run multiple agents simultaneously, each monitoring the same atSign or different atSigns:
+To run multiple agents simultaneously. You can run agents with:
+- **Same atSign** (load balancing) - mutex ensures only one responds per query
+- **Different atSigns** (independent agents) - each responds to its own queries
 
-### Example 1: Multiple specialized agents
+### Example 1: Load Balanced Agents (Same atSign)
+
+Run multiple instances with the same atSign for automatic load balancing:
+
+**Terminal 1:**
+```bash
+./run_agent.sh -n "Agent 1"
+```
+
+**Terminal 2:**
+```bash
+./run_agent.sh -n "Agent 2"
+```
+
+**Terminal 3:**
+```bash
+./run_agent.sh -n "Agent 3"
+```
+
+**Result**: Each query is automatically handled by exactly one agent. The mutex system ensures no duplicate responses.
+
+### Example 2: Multiple specialized agents (Different atSigns)
 
 **Terminal 1 - General Agent:**
 ```bash
@@ -52,13 +85,13 @@ dart run bin/agent.dart --env .env.research -n "Research Assistant"
 ```bash
 cd agent
 cp .env .env.code
-# Edit .env.research with appropriate settings
+# Edit .env.code with appropriate settings
 dart run bin/agent.dart --env .env.code -n "Code Helper"
 ```
 
-### Example 2: Using different Ollama models
+### Example 3: Using different Ollama models
 
-You can run agents with different models by specifying different OLLAMA_MODEL values:
+You can run load-balanced agents with different models by specifying different OLLAMA_MODEL values:
 
 **.env.fast** (using llama3):
 ```env
@@ -117,4 +150,37 @@ tmux new-session -d -s agent3 './run_agent.sh -n "Agent 3"'
 
 ## Testing
 
-Send a message from the app and you should see responses from all running agents, each clearly labeled with their configured name.
+### Testing Load Balanced Agents (Same atSign)
+
+1. Start multiple agents with the same atSign but different names
+2. Send a message from the app
+3. **Expected**: You should see exactly ONE response, labeled with one agent's name
+4. Check the agent logs - one will show `😎 Acquired mutex`, others show `🤷‍♂️ Will not handle`
+5. Send another message - it may be handled by a different agent
+
+### Testing Independent Agents (Different atSigns)
+
+1. Start agents with different atSigns
+2. Send a message from the app
+3. **Expected**: You should see responses from ALL running agents (if they all monitor your atSign)
+4. Each response will be clearly labeled with the agent's name
+
+## How the Mutex Works
+
+When you run multiple agents with the **same atSign**:
+
+1. Query arrives → All agents receive it
+2. Agents race to acquire mutex using query ID
+3. First agent to create mutex lock wins
+4. Winner processes query and responds
+5. Losers skip the query (log: `🤷‍♂️ Will not handle`)
+
+This happens automatically - no configuration needed!
+
+**Mutex Logging:**
+- `😎 Acquired mutex for query {id}` - This agent won and will respond
+- `🤷‍♂️ Will not handle query {id}` - Another agent won, this one skips
+- `🆕 Creating new mutex` - No existing lock found
+- `🔒 Mutex already acquired` - Another agent has valid lock
+
+For more details, see [AGENT_MUTEX.md](AGENT_MUTEX.md).

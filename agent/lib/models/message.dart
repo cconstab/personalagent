@@ -46,6 +46,10 @@ class QueryMessage extends AgentMessage {
   final bool useOllamaOnly;
   final List<Map<String, dynamic>>? conversationHistory;
 
+  /// The notification ID from atPlatform - used for mutex coordination
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  final String? notificationId;
+
   QueryMessage({
     required String id,
     required String content,
@@ -53,6 +57,7 @@ class QueryMessage extends AgentMessage {
     this.contextKeys,
     this.useOllamaOnly = false,
     this.conversationHistory,
+    this.notificationId,
     DateTime? timestamp,
   }) : super(
           id: id,

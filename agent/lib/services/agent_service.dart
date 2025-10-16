@@ -13,8 +13,8 @@ class AgentService {
   final double privacyThreshold;
   final String? agentName;
 
-  // Store Ollama context per user for conversation continuity
-  final Map<String, List<int>> _conversationContexts = {};
+  // Note: Agents are now stateless - conversation history comes from the app
+  // This enables perfect load balancing across multiple agent instances
 
   AgentService({
     required this.atPlatform,
@@ -50,18 +50,6 @@ class AgentService {
     _logger.info('Agent services initialized successfully');
   }
 
-  /// Clear conversation context for a user (e.g., when starting a new conversation)
-  void clearConversationContext(String userId) {
-    _conversationContexts.remove(userId);
-    _logger.info('🧹 Cleared conversation context for $userId');
-  }
-
-  /// Clear all conversation contexts
-  void clearAllConversationContexts() {
-    _conversationContexts.clear();
-    _logger.info('🧹 Cleared all conversation contexts');
-  }
-
   /// Start listening for incoming queries
   Future<void> startListening() async {
     _logger.info('Starting to listen for queries');
@@ -74,6 +62,17 @@ class AgentService {
     try {
       _logger.info('⚡ Handling query from ${query.userId}');
 
+      // Try to acquire mutex for this query - ensures only one agent responds
+      final mutexAcquired = await _tryAcquireQueryMutex(query);
+      if (!mutexAcquired) {
+        _logger.info(
+            '🤷‍♂️ Will not handle query ${query.id} - another agent instance will handle this');
+        return; // Another agent instance acquired the mutex, so we skip this query
+      }
+
+      _logger.info(
+          '😎 Acquired mutex for query ${query.id} - this agent will respond');
+
       // Process the query
       final response = await processQuery(query);
 
@@ -81,6 +80,7 @@ class AgentService {
       await atPlatform.sendResponse(query.userId, response);
 
       _logger.info('✅ Sent response to ${query.userId}');
+      // Note: Mutex will auto-expire after 30 seconds (TTL)
     } catch (e, stackTrace) {
       _logger.severe('Failed to handle query', e, stackTrace);
 
@@ -98,6 +98,41 @@ class AgentService {
       } catch (sendError) {
         _logger.severe('Failed to send error response', sendError);
       }
+    }
+  }
+
+  /// Try to acquire a mutex for this query to ensure only one agent responds.
+  /// Returns true if this agent acquired the mutex (should handle the query),
+  /// false if another agent already acquired it (should skip the query).
+  ///
+  /// This implements the same pattern as sshnpd load balancing - using an
+  /// immutable AtKey that can only be created once. The first agent to create
+  /// it wins the mutex.
+  Future<bool> _tryAcquireQueryMutex(QueryMessage query) async {
+    try {
+      // CRITICAL: Use notification ID as the mutex identifier
+      // All agents receive the same notification ID, ensuring they coordinate on the same mutex
+      final mutexId = query.notificationId ?? query.id;
+
+      // Create mutex key: {notificationId}.query_mutexes.personalagent{agentAtSign}
+      final mutexAcquired = await atPlatform.tryAcquireMutex(
+        mutexId: mutexId,
+        ttlSeconds: 30, // Expire after 30 seconds to keep datastore clean
+      );
+
+      if (mutexAcquired) {
+        _logger.info(
+            '😎 Acquired mutex for notification $mutexId (query ${query.id})');
+        return true;
+      } else {
+        _logger.info(
+            '🤷‍♂️ Did not acquire mutex for notification $mutexId (another agent instance will handle this)');
+        return false;
+      }
+    } catch (e) {
+      _logger.warning(
+          'Error acquiring mutex, proceeding anyway to maintain functionality: $e');
+      return true; // Proceed anyway if there's an unexpected error
     }
   }
 
@@ -172,19 +207,29 @@ class AgentService {
   ) async {
     _logger.info('Processing with Ollama only (fully private)');
 
-    // Get existing conversation context for this user
-    final existingContext = _conversationContexts[query.userId];
+    // Agents are now stateless - conversation history comes from the app
+    final hasHistory = query.conversationHistory != null &&
+        query.conversationHistory!.isNotEmpty;
 
-    if (existingContext != null) {
+    if (hasHistory) {
       _logger.info(
-          '📝 Found existing conversation context (${existingContext.length} tokens)');
+          '📝 Using conversation history from app (${query.conversationHistory!.length} messages)');
+      _logger.info('🔍 History contents:');
+      for (var i = 0; i < query.conversationHistory!.length; i++) {
+        final msg = query.conversationHistory![i];
+        final role = msg['role'] ?? 'unknown';
+        final content = msg['content'] ?? '';
+        final preview =
+            content.length > 50 ? '${content.substring(0, 50)}...' : content;
+        _logger.info('   [$i] $role: $preview');
+      }
     } else {
       _logger.info('🆕 Starting new conversation for ${query.userId}');
     }
 
     // Build system message with user's personal context (only on first message)
     String systemContext = '';
-    if (existingContext == null && context.isNotEmpty) {
+    if (!hasHistory && context.isNotEmpty) {
       systemContext =
           '''You are a helpful personal AI assistant having a natural conversation with the user.
 
@@ -195,23 +240,39 @@ Respond naturally and conversationally.
 ''';
     }
 
-    // Build the current prompt
-    final prompt = existingContext == null
-        ? '$systemContext\nUser: ${query.content}'
-        : 'User: ${query.content}';
+    // Build the full conversation prompt from history
+    final StringBuffer promptBuffer = StringBuffer();
+
+    if (!hasHistory) {
+      promptBuffer.write('$systemContext\n');
+    } else {
+      // Include conversation history
+      for (var msg in query.conversationHistory!) {
+        final role = msg['role'] ?? 'user';
+        final content = msg['content'] ?? '';
+        promptBuffer
+            .write('${role == 'user' ? 'User' : 'Assistant'}: $content\n');
+      }
+    }
+
+    _logger.info('📤 Final prompt being sent to Ollama:');
+    final promptPreview = promptBuffer.toString().length > 200
+        ? '${promptBuffer.toString().substring(0, 200)}...'
+        : promptBuffer.toString();
+    _logger.info('   $promptPreview');
+
+    promptBuffer.write('User: ${query.content}');
 
     _logger.info(
-        '🤖 Sending prompt to Ollama with ${existingContext != null ? "existing" : "new"} context');
+        '🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"})');
 
     final response = await ollama.generate(
-      prompt: prompt,
-      context: existingContext, // Pass previous conversation context
+      prompt: promptBuffer.toString(),
+      context:
+          null, // Don't use stored context - regenerate from history each time
     );
 
-    // Store the updated context for next message
-    _conversationContexts[query.userId] = response.context;
-    _logger.info(
-        '💾 Stored conversation context (${response.context.length} tokens)');
+    // Note: No context storage - app maintains conversation history
 
     return ResponseMessage(
       id: query.id,
@@ -236,13 +297,13 @@ Respond naturally and conversationally.
 
     _logger.info('Processing with hybrid approach (Ollama + Claude)');
 
-    // Get existing conversation context for this user
-    final existingContext = _conversationContexts[query.userId];
+    // Agents are now stateless - use conversation history from app
+    final hasHistory = query.conversationHistory != null &&
+        query.conversationHistory!.isNotEmpty;
 
     // Build brief conversation history for Claude (last 2-3 exchanges only to save tokens)
     String conversationContext = '';
-    if (query.conversationHistory != null &&
-        query.conversationHistory!.isNotEmpty) {
+    if (hasHistory) {
       final recentHistory = query.conversationHistory!.length > 6
           ? query.conversationHistory!
               .sublist(query.conversationHistory!.length - 6)
@@ -271,9 +332,12 @@ Respond naturally and conversationally.
     _logger.info(
         'Received response from Claude (${claudeResponse.usage.totalTokens} tokens)');
 
-    // Step 3: Combine Claude's knowledge with user context using Ollama with conversation memory
-    final combinationPrompt = existingContext == null
-        ? '''You are a helpful personal AI assistant.
+    // Step 3: Combine Claude's knowledge with user context using Ollama
+    // Build full prompt including conversation history
+    final StringBuffer promptBuffer = StringBuffer();
+
+    if (!hasHistory) {
+      promptBuffer.write('''You are a helpful personal AI assistant.
 
 User's Personal Information:
 $context
@@ -281,23 +345,27 @@ $context
 General knowledge to help answer:
 ${claudeResponse.content}
 
-User: ${query.content}
+''');
+    } else {
+      // Include conversation history
+      for (var msg in query.conversationHistory!) {
+        final role = msg['role'] ?? 'user';
+        final content = msg['content'] ?? '';
+        promptBuffer
+            .write('${role == 'user' ? 'User' : 'Assistant'}: $content\n');
+      }
+      promptBuffer.write(
+          '\nGeneral knowledge to help answer:\n${claudeResponse.content}\n\n');
+    }
 
-Respond naturally using the general knowledge combined with what you know about the user.'''
-        : '''General knowledge to help answer:
-${claudeResponse.content}
-
-User: ${query.content}''';
+    promptBuffer.write('User: ${query.content}');
 
     final finalResponse = await ollama.generate(
-      prompt: combinationPrompt,
-      context: existingContext, // Use conversation context
+      prompt: promptBuffer.toString(),
+      context: null, // Don't use stored context - regenerate from history
     );
 
-    // Store the updated context
-    _conversationContexts[query.userId] = finalResponse.context;
-    _logger.info(
-        '💾 Stored conversation context (${finalResponse.context.length} tokens)');
+    // Note: No context storage - app maintains conversation history
 
     return ResponseMessage(
       id: query.id,

@@ -224,8 +224,6 @@ class AtPlatformService {
               useOllamaOnly: useOllamaOnly,
               conversationHistory:
                   conversationHistory?.cast<Map<String, dynamic>>(),
-              notificationId:
-                  notification.id, // CRITICAL: Use notification ID for mutex
               timestamp: DateTime.parse(
                 jsonData['timestamp'] ?? DateTime.now().toIso8601String(),
               ),
@@ -306,10 +304,9 @@ class AtPlatformService {
   /// Try to acquire a mutex for a specific identifier (query ID, session ID, etc.).
   /// Returns true if this instance acquired the mutex, false if another instance already has it.
   ///
-  /// This implements an atomic mutex pattern for load balancing between multiple agents:
-  /// - Uses immutable metadata flag to make key creation atomic
-  /// - First agent to successfully create the key wins (like sshnpd pattern)
-  /// - Other agents get AtKeyException and know to skip the query
+  /// This implements a simplified mutex pattern for load balancing between multiple agents:
+  /// - Uses a combination of get+put to create a mutex
+  /// - First agent to successfully create the key wins
   /// - Mutex expires after ttlSeconds to prevent stale locks
   Future<bool> tryAcquireMutex({
     required String mutexId,
@@ -318,48 +315,70 @@ class AtPlatformService {
     _ensureInitialized();
 
     try {
-      // Create mutex key with IMMUTABLE flag for atomic creation
-      // This is the same pattern used by sshnpd for mutex coordination
-      // CRITICAL: Use AtKey.fromString with full key path to create PRIVATE key
-      // that all instances of the same atSign will see identically
-      final mutexKey = AtKey.fromString(
-        '$mutexId.query_mutexes.personalagent$atSign',
-      )..metadata = (Metadata()
-        ..ttl = ttlSeconds * 1000 // TTL in milliseconds
-        ..immutable = true); // CRITICAL: Makes creation atomic - first wins!
+      // Create mutex key: {mutexId}.query_mutexes.personalagent@{atSign}
+      final mutexKey = AtKey()
+        ..key = '$mutexId.query_mutexes'
+        ..namespace = 'personalagent'
+        ..sharedWith = atSign; // Share with self
 
-      _logger.info(
-          'Attempting to acquire mutex: $mutexId (key: $mutexId.query_mutexes.personalagent$atSign)');
+      // Use a simpler approach: just try to put, then verify
+      // Don't check beforehand - this avoids the race condition
+      // where both agents see "not found" and both try to acquire
+      _logger.info('� Attempting to acquire mutex: $mutexId');
 
-      // Try to create the mutex key atomically
-      // If another agent already created it, this will throw an exception
+      // Try to create the mutex key with REMOTE server write
+      // This is CRITICAL - must use useRemoteAtServer = true
+      // Otherwise each agent only updates their local cache!
+      final putOptions = PutRequestOptions()
+        ..useRemoteAtServer = true; // Force write to remote secondary server
+      
+      // Generate a unique identifier for THIS agent instance
+      final myLockId = '${atSign}_${DateTime.now().microsecondsSinceEpoch}_${instanceId ?? "default"}';
+      
       final lockData = json.encode({
         'timestamp': DateTime.now().toIso8601String(),
         'agent': atSign,
-        'instanceId': instanceId ?? 'default',
+        'lockId': myLockId,
       });
 
-      final putOptions = PutRequestOptions()
-        ..useRemoteAtServer = true; // CRITICAL: write to remote server
-
+      // Write to REMOTE server (not just local cache)
       await _atClient!.put(mutexKey, lockData, putRequestOptions: putOptions);
+      _logger.info('📤 Put mutex to remote server: $myLockId');
 
-      // Success! This agent won the mutex
-      _logger.info('✅ Acquired mutex: $mutexId');
-      return true;
-    } on AtKeyException catch (e) {
-      // Another agent already has the mutex (immutable key already exists)
-      _logger.info('🔒 Mutex held by another agent: $mutexId - ${e.message}');
-      return false;
-    } catch (e) {
-      // Check if this is an immutable key error (different exception type)
-      final errorMsg = e.toString().toLowerCase();
-      if (errorMsg.contains('immutable')) {
-        _logger.info('🔒 Mutex held by another agent: $mutexId - $e');
-        return false;
+      // CRITICAL: Verify we actually won the race
+      // Sleep longer to let any concurrent puts settle on the server
+      // The last write wins on the atServer
+      await Future.delayed(Duration(milliseconds: 200));
+      
+      // Read back from server to see who won (this will hit the server)
+      try {
+        final verifyResult = await _atClient!.get(mutexKey);
+        if (verifyResult.value != null) {
+          final storedData = json.decode(verifyResult.value) as Map<String, dynamic>;
+          final storedLockId = storedData['lockId'] as String?;
+          
+          _logger.info('📥 Read back mutex from server: $storedLockId');
+          
+          if (storedLockId == myLockId) {
+            // We won!
+            _logger.info('✅ Acquired mutex: $mutexId (verified: $myLockId)');
+            return true;
+          } else {
+            // Someone else won the race (their write came after ours)
+            _logger.info('🔒 Lost mutex race to another agent: $mutexId (their lock: $storedLockId)');
+            return false;
+          }
+        }
+      } catch (e) {
+        _logger.warning('⚠️ Error verifying mutex (will assume acquired): $e');
+        return true; // Proceed if we can't verify
       }
 
-      // For any other error, log it but allow the query to proceed
+      // Shouldn't reach here, but if we do, assume we got it
+      _logger.info('✅ Acquired mutex: $mutexId (no stored value to verify)');
+      return true;
+    } catch (e) {
+      // For any error, log it but allow the query to proceed
       // This ensures the system keeps working even if there are unexpected issues
       _logger.warning('⚠️ Error with mutex (will proceed anyway): $e');
       return true;

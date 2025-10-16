@@ -93,6 +93,7 @@ void main(List<String> arguments) async {
       atSign: atSign,
       keysFilePath: atKeysPath,
       rootServer: atRootServer,
+      instanceId: agentName.isNotEmpty ? agentName : null,
     );
 
     final ollama = OllamaService(
