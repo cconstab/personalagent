@@ -268,20 +268,20 @@ graph TD
 ### Query Sanitization Process
 
 ```mermaid
-graph LR
-    Q[Original Query:<br/>"Should I accept<br/>$120k job at Acme?"]
+flowchart TD
+    Q["Original Query: 'Should I accept $120k job at Acme?'"]
     
-    A[Analyze for<br/>Personal Data]
+    A[Analyze for Personal Data]
     
-    S[Sanitize:<br/>Remove names, numbers,<br/>personal identifiers]
+    S["Sanitize: Remove names, numbers, personal identifiers"]
     
-    C[Claude Query:<br/>"Software engineer<br/>compensation analysis"]
+    C["Claude Query: 'Software engineer compensation analysis'"]
     
-    R[Generic Response:<br/>Market trends,<br/>average salaries]
+    R["Generic Response: Market trends, average salaries"]
     
-    P[Personalize:<br/>Apply to user's<br/>specific situation]
+    P["Personalize: Apply to user's specific situation"]
     
-    F[Final Response:<br/>Personalized advice<br/>using user context]
+    F["Final Response: Personalized advice using user context"]
     
     Q --> A
     A --> S
