@@ -524,6 +524,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
+          ListTile(
+            leading: const Icon(Icons.bug_report),
+            title: const Text('Debug: List atPlatform Keys'),
+            subtitle: const Text('Show what conversations are stored'),
+            onTap: () async {
+              final agent = context.read<AgentProvider>();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Check console for debug output')),
+              );
+              await agent.debugListAllKeys();
+            },
+          ),
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('Version'),

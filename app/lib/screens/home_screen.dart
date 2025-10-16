@@ -9,6 +9,7 @@ import '../services/at_client_service.dart' as app_service;
 import '../widgets/chat_bubble.dart';
 import '../widgets/input_field.dart';
 import 'settings_screen.dart';
+import 'conversations_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -39,8 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (authProvider.atSign != null) {
         debugPrint('🔄 Initializing AtClient for ${authProvider.atSign}');
 
-        // Clear old messages when switching @signs
-        agentProvider.clearMessages();
+        // Note: Don't clear messages here - causes setState during build
+        // Messages will be loaded from atPlatform anyway
 
         // Use the SDK's onboarding to authenticate with keychain keys
         await _authenticateWithKeychain(authProvider.atSign!);
@@ -54,6 +55,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         debugPrint('✅ AtClient initialized successfully');
+
+        // Now that AtClient is ready, reload conversations from atPlatform
+        debugPrint('🔄 Reloading conversations now that AtClient is ready...');
+        await agentProvider.reloadConversations();
       }
     } catch (e) {
       debugPrint('❌ Failed to initialize AtClient: $e');
@@ -146,6 +151,46 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollToBottom();
   }
 
+  void _showDeleteCurrentConversationDialog(
+      BuildContext context, AgentProvider agent) {
+    final conversation = agent.currentConversation;
+    if (conversation == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Conversation'),
+        content: Text(
+          'Are you sure you want to delete "${conversation.title}"?\n\nThis will permanently delete it from all your devices.\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await agent.deleteConversation(conversation.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Conversation deleted'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,6 +218,44 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
         actions: [
+          // Conversations list button
+          IconButton(
+            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: 'Conversations',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const ConversationsScreen()),
+              );
+            },
+          ),
+          // New conversation button
+          IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: 'New Conversation',
+            onPressed: () {
+              context.read<AgentProvider>().createNewConversation();
+            },
+          ),
+          // Delete current conversation button
+          Consumer<AgentProvider>(
+            builder: (context, agent, _) {
+              // Only show if there's a current conversation
+              if (agent.currentConversation == null) {
+                return const SizedBox.shrink();
+              }
+
+              return IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: 'Delete Conversation',
+                onPressed: () {
+                  _showDeleteCurrentConversationDialog(context, agent);
+                },
+              );
+            },
+          ),
+          // Settings button
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
