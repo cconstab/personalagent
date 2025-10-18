@@ -74,6 +74,14 @@ class AtPlatformService {
 
       // Get the authenticated atClient
       _atClient = onboardingService.atClient;
+
+      // CRITICAL: Set fetchOfflineNotifications to false to ignore old notifications
+      // This prevents processing stale queries that accumulated while agent was offline
+      _atClient!.getPreferences()!.fetchOfflineNotifications = false;
+      _logger.info(
+        '📅 Configured to fetch ONLY new notifications (ignore offline backlog)',
+      );
+
       _isInitialized = true;
 
       _logger.info('✅ AtPlatform initialized successfully');
@@ -160,21 +168,25 @@ class AtPlatformService {
 
   /// Subscribe to incoming messages from Flutter app
   Future<void> subscribeToMessages(
-      Future<void> Function(QueryMessage) onQueryReceived) async {
+    Future<void> Function(QueryMessage) onQueryReceived,
+  ) async {
     _ensureInitialized();
 
     _logger.info('🔔 Setting up notification listener');
     _logger.info('   AtClient: ${_atClient != null ? "initialized" : "NULL"}');
     _logger.info(
-        '   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}');
+      '   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}',
+    );
 
     try {
       // Subscribe with same pattern as at_talk - this makes auto-decryption work!
       _logger.info('📡 Subscribing with regex: query.personalagent@');
       _logger.info('   (Following at_talk_gui pattern for auto-decryption)');
 
-      final stream = _atClient!.notificationService
-          .subscribe(regex: 'query.personalagent@', shouldDecrypt: true);
+      final stream = _atClient!.notificationService.subscribe(
+        regex: 'query.personalagent@',
+        shouldDecrypt: true,
+      );
 
       _logger.info('✅ Subscribe call completed, got stream');
 
@@ -205,7 +217,8 @@ class AtPlatformService {
             }
 
             _logger.info(
-                '   Value preview: ${notification.value!.substring(0, notification.value!.length > 100 ? 100 : notification.value!.length)}...');
+              '   Value preview: ${notification.value!.substring(0, notification.value!.length > 100 ? 100 : notification.value!.length)}...',
+            );
 
             // Parse the JSON data - should be decrypted automatically
             final jsonData = json.decode(notification.value!);
@@ -217,13 +230,14 @@ class AtPlatformService {
                 jsonData['conversationHistory'] as List<dynamic>?;
 
             final query = QueryMessage(
-              id: jsonData['id'] ??
+              id:
+                  jsonData['id'] ??
                   DateTime.now().millisecondsSinceEpoch.toString(),
               content: jsonData['content'] ?? '',
               userId: jsonData['userId'] ?? notification.from ?? '',
               useOllamaOnly: useOllamaOnly,
-              conversationHistory:
-                  conversationHistory?.cast<Map<String, dynamic>>(),
+              conversationHistory: conversationHistory
+                  ?.cast<Map<String, dynamic>>(),
               notificationId:
                   notification.id, // CRITICAL: Use notification ID for mutex
               timestamp: DateTime.parse(
@@ -233,11 +247,14 @@ class AtPlatformService {
 
             _logger.info('⚡ Processing query: ${query.id}');
             _logger.info(
-                '   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}');
+              '   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}',
+            );
             _logger.info(
-                '   Conversation History: ${conversationHistory?.length ?? 0} messages');
+              '   Conversation History: ${conversationHistory?.length ?? 0} messages',
+            );
             _logger.info(
-                '   Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...');
+              '   Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...',
+            );
 
             // Call the callback to process the query
             await onQueryReceived(query);
@@ -272,7 +289,9 @@ class AtPlatformService {
 
   /// Send response message to Flutter app
   Future<void> sendResponse(
-      String recipientAtSign, ResponseMessage response) async {
+    String recipientAtSign,
+    ResponseMessage response,
+  ) async {
     _ensureInitialized();
 
     try {
@@ -289,7 +308,8 @@ class AtPlatformService {
       );
 
       _logger.info(
-          'Sent response to $recipientAtSign: ${notificationResult.notificationID}');
+        'Sent response to $recipientAtSign: ${notificationResult.notificationID}',
+      );
     } catch (e, stackTrace) {
       _logger.severe('Failed to send response', e, stackTrace);
       rethrow;
@@ -299,7 +319,8 @@ class AtPlatformService {
   void _ensureInitialized() {
     if (!_isInitialized) {
       throw Exception(
-          'AtPlatformService not initialized. Call initialize() first.');
+        'AtPlatformService not initialized. Call initialize() first.',
+      );
     }
   }
 
@@ -322,14 +343,18 @@ class AtPlatformService {
       // This is the same pattern used by sshnpd for mutex coordination
       // CRITICAL: Use AtKey.fromString with full key path to create PRIVATE key
       // that all instances of the same atSign will see identically
-      final mutexKey = AtKey.fromString(
-        '$mutexId.query_mutexes.personalagent$atSign',
-      )..metadata = (Metadata()
-        ..ttl = ttlSeconds * 1000 // TTL in milliseconds
-        ..immutable = true); // CRITICAL: Makes creation atomic - first wins!
+      final mutexKey =
+          AtKey.fromString('$mutexId.query_mutexes.personalagent$atSign')
+            ..metadata = (Metadata()
+              ..ttl =
+                  ttlSeconds *
+                  1000 // TTL in milliseconds
+              ..immutable =
+                  true); // CRITICAL: Makes creation atomic - first wins!
 
       _logger.info(
-          'Attempting to acquire mutex: $mutexId (key: $mutexId.query_mutexes.personalagent$atSign)');
+        'Attempting to acquire mutex: $mutexId (key: $mutexId.query_mutexes.personalagent$atSign)',
+      );
 
       // Try to create the mutex key atomically
       // If another agent already created it, this will throw an exception

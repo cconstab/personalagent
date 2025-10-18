@@ -112,11 +112,11 @@ class AgentService {
   /// immutable AtKey that can only be created once. The first agent to create
   /// it wins the mutex.
   Future<bool> _tryAcquireQueryMutex(QueryMessage query) async {
-    try {
-      // CRITICAL: Use notification ID as the mutex identifier
-      // All agents receive the same notification ID, ensuring they coordinate on the same mutex
-      final mutexId = query.notificationId ?? query.id;
+    // CRITICAL: Use notification ID as the mutex identifier
+    // All agents receive the same notification ID, ensuring they coordinate on the same mutex
+    final mutexId = query.notificationId ?? query.id;
 
+    try {
       // Create mutex key: {notificationId}.query_mutexes.personalagent{agentAtSign}
       final mutexAcquired = await atPlatform.tryAcquireMutex(
         mutexId: mutexId,
@@ -136,10 +136,10 @@ class AgentService {
         return false;
       }
     } catch (e) {
-      _logger.warning(
-        'Error acquiring mutex, proceeding anyway to maintain functionality: $e',
+      _logger.severe(
+        'Error acquiring mutex for $mutexId - will NOT respond to avoid duplicates: $e',
       );
-      return true; // Proceed anyway if there's an unexpected error
+      return false; // Do NOT respond if mutex acquisition fails - avoid duplicate responses
     }
   }
 
