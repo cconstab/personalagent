@@ -34,6 +34,30 @@ Query → atPlatform (encrypted) → Agent Service
 3. **atPlatform Keys** - Get your @sign and keys from [atsign.com](https://atsign.com)
 4. **Claude API Key** (optional) from [console.anthropic.com](https://console.anthropic.com)
 
+### Activating Your @sign and Generating atKeys
+
+If you have an atSign but haven't generated your atKeys file yet, you can use the `at_activate` tool:
+
+```bash
+# Activate your @sign and generate atKeys file
+dart run bin/activate_cli.dart -a @your_agent -k path/to/keys -c your_cram_secret
+
+# Example:
+dart run bin/activate_cli.dart -a @myagent -k ./keys -c abc123-def456-ghi789
+```
+
+**Command Options:**
+- `-a` or `--atsign`: Your atSign (e.g., @myagent)
+- `-k` or `--keyfile`: Directory path where atKeys file will be saved (default: ./keys)
+- `-c` or `--cram`: Your CRAM secret (obtained when you registered your @sign)
+
+This will:
+1. Authenticate with the atPlatform using your CRAM secret
+2. Generate your encryption keys
+3. Save the `.atKeys` file in the specified directory
+
+**Note**: Keep your CRAM secret and atKeys file secure! The atKeys file contains your private encryption keys.
+
 ### Installation
 
 1. Install dependencies:
