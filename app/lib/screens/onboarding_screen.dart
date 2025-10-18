@@ -280,10 +280,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
         // Refresh the dialog
@@ -298,10 +298,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -372,10 +372,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -435,10 +435,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -450,10 +450,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -477,10 +477,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+            bottom: MediaQuery.of(context).size.height - 100,
+            left: 10,
+            right: 10,
+          ),
         ),
       );
     }
@@ -567,10 +567,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               duration: const Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,
               margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+                bottom: MediaQuery.of(context).size.height - 100,
+                left: 10,
+                right: 10,
+              ),
             ),
           );
         }
@@ -685,10 +685,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 duration: const Duration(seconds: 8),
                 behavior: SnackBarBehavior.floating,
                 margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+                  bottom: MediaQuery.of(context).size.height - 100,
+                  left: 10,
+                  right: 10,
+                ),
               ),
             );
           }
@@ -706,10 +706,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
             duration: const Duration(seconds: 5),
           ),
         );

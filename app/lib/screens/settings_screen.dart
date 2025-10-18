@@ -76,10 +76,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     content: Text('Agent @sign set to $formattedAtSign'),
                     behavior: SnackBarBehavior.floating,
                     margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
                   ),
                 );
               }
@@ -188,10 +188,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: Colors.orange,
               behavior: SnackBarBehavior.floating,
               margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
+                bottom: MediaQuery.of(context).size.height - 100,
+                left: 10,
+                right: 10,
+              ),
             ),
           );
         }
@@ -260,10 +260,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 backgroundColor: Colors.green,
                 behavior: SnackBarBehavior.floating,
                 margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
+                  bottom: MediaQuery.of(context).size.height - 100,
+                  left: 10,
+                  right: 10,
+                ),
               ),
             );
           }
@@ -420,10 +420,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 backgroundColor: Colors.green,
                 behavior: SnackBarBehavior.floating,
                 margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
+                  bottom: MediaQuery.of(context).size.height - 100,
+                  left: 10,
+                  right: 10,
+                ),
               ),
             );
           }
@@ -509,10 +509,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       behavior: SnackBarBehavior.floating,
                       margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
+                        bottom: MediaQuery.of(context).size.height - 100,
+                        left: 10,
+                        right: 10,
+                      ),
                     ),
                   );
                 },

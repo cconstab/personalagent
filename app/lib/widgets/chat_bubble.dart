@@ -74,7 +74,9 @@ class _ChatBubbleState extends State<ChatBubble> {
                     ? colorScheme.error
                     : colorScheme.primaryContainer,
                 child: Icon(
-                  widget.message.isError ? Icons.error_outline : Icons.smart_toy,
+                  widget.message.isError
+                      ? Icons.error_outline
+                      : Icons.smart_toy,
                   color: widget.message.isError
                       ? colorScheme.onError
                       : colorScheme.onPrimaryContainer,
@@ -97,225 +99,231 @@ class _ChatBubbleState extends State<ChatBubble> {
                               : widget.message.isError
                                   ? colorScheme.errorContainer
                                   : colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(16),
-                      topRight: const Radius.circular(16),
-                      bottomLeft: Radius.circular(isUser ? 16 : 4),
-                      bottomRight: Radius.circular(isUser ? 4 : 16),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (!isUser && widget.message.agentName != null) ...[
-                        Row(
-                          children: [
-                            Text(
-                              widget.message.agentName ?? '',
-                              style: (Theme.of(context)
-                                  .textTheme
-                                  .labelSmall ??
-                                  const TextStyle())
-                                  .copyWith(
-                                    color: colorScheme.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
-                            if (widget.message.model != null) ...[
-                              Text(
-                                ' • ',
-                                style: (Theme.of(context)
-                                    .textTheme
-                                    .labelSmall ??
-                                    const TextStyle())
-                                    .copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                              Flexible(
-                                child: Text(
-                                  widget.message.model ?? '',
-                                  style: (Theme.of(context)
-                                      .textTheme
-                                      .labelSmall ??
-                                      const TextStyle())
-                                      .copyWith(
-                                        color: colorScheme.onSurfaceVariant,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ],
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(16),
+                            topRight: const Radius.circular(16),
+                            bottomLeft: Radius.circular(isUser ? 16 : 4),
+                            bottomRight: Radius.circular(isUser ? 4 : 16),
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                      ],
-                      // Use Markdown for agent responses, SelectableText for user messages
-                      if (!isUser)
-                        Column(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            MarkdownBody(
-                              data: widget.message.content,
-                              selectable: false,
-                              styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                                p: (Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium ??
-                                    const TextStyle())
-                                    .copyWith(
-                                      color: widget.message.isError
-                                          ? colorScheme.onErrorContainer
-                                          : colorScheme.onSurfaceVariant,
-                                    ),
-                                strong: (Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium ??
-                                    const TextStyle())
-                                    .copyWith(
-                                      color: widget.message.isError
-                                          ? colorScheme.onErrorContainer
-                                          : colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                em: (Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium ??
-                                    const TextStyle())
-                                    .copyWith(
-                                      color: widget.message.isError
-                                          ? colorScheme.onErrorContainer
-                                          : colorScheme.onSurfaceVariant,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                listBullet: (Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium ??
-                                    const TextStyle())
-                                    .copyWith(
-                                      color: widget.message.isError
-                                          ? colorScheme.onErrorContainer
-                                          : colorScheme.onSurfaceVariant,
-                                    ),
-                                code: (Theme.of(context)
-                                    .textTheme
-                                    .bodySmall ??
-                                    const TextStyle())
-                                    .copyWith(
-                                      color: widget.message.isError
-                                          ? colorScheme.onErrorContainer
-                                          : colorScheme.onSurfaceVariant,
-                                      fontFamily: 'monospace',
-                                      backgroundColor:
-                                          colorScheme.surface.withOpacity(0.3),
-                                    ),
-                              ),
-                              onTapLink: (text, href, title) {
-                                if (href != null) {
-                                  launchUrl(Uri.parse(href),
-                                      mode: LaunchMode.externalApplication);
-                                }
-                              },
-                            ),
-                            // Show streaming indicator for partial messages
-                            if (widget.message.isPartial) ...[
-                              const SizedBox(height: 4),
+                            if (!isUser &&
+                                widget.message.agentName != null) ...[
                               Row(
                                 children: [
-                                  SizedBox(
-                                    width: 12,
-                                    height: 12,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color:
-                                          colorScheme.primary.withOpacity(0.6),
+                                  Text(
+                                    widget.message.agentName ?? '',
+                                    style: (Theme.of(context)
+                                                .textTheme
+                                                .labelSmall ??
+                                            const TextStyle())
+                                        .copyWith(
+                                      color: colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    widget.message.content.isEmpty
-                                        ? 'Thinking...'
-                                        : 'Streaming...',
-                                    style: (Theme.of(context)
-                                        .textTheme
-                                        .bodySmall ??
-                                        const TextStyle())
-                                        .copyWith(
-                                          color: colorScheme.onSurfaceVariant
-                                              .withOpacity(0.7),
+                                  if (widget.message.model != null) ...[
+                                    Text(
+                                      ' • ',
+                                      style: (Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall ??
+                                              const TextStyle())
+                                          .copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    Flexible(
+                                      child: Text(
+                                        widget.message.model ?? '',
+                                        style: (Theme.of(context)
+                                                    .textTheme
+                                                    .labelSmall ??
+                                                const TextStyle())
+                                            .copyWith(
+                                          color: colorScheme.onSurfaceVariant,
                                           fontStyle: FontStyle.italic,
                                         ),
-                                  ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
+                              const SizedBox(height: 4),
+                            ],
+                            // Use Markdown for agent responses, SelectableText for user messages
+                            if (!isUser)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  MarkdownBody(
+                                    data: widget.message.content,
+                                    selectable: false,
+                                    styleSheet: MarkdownStyleSheet.fromTheme(
+                                            Theme.of(context))
+                                        .copyWith(
+                                      p: (Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium ??
+                                              const TextStyle())
+                                          .copyWith(
+                                        color: widget.message.isError
+                                            ? colorScheme.onErrorContainer
+                                            : colorScheme.onSurfaceVariant,
+                                      ),
+                                      strong: (Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium ??
+                                              const TextStyle())
+                                          .copyWith(
+                                        color: widget.message.isError
+                                            ? colorScheme.onErrorContainer
+                                            : colorScheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      em: (Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium ??
+                                              const TextStyle())
+                                          .copyWith(
+                                        color: widget.message.isError
+                                            ? colorScheme.onErrorContainer
+                                            : colorScheme.onSurfaceVariant,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                      listBullet: (Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium ??
+                                              const TextStyle())
+                                          .copyWith(
+                                        color: widget.message.isError
+                                            ? colorScheme.onErrorContainer
+                                            : colorScheme.onSurfaceVariant,
+                                      ),
+                                      code: (Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall ??
+                                              const TextStyle())
+                                          .copyWith(
+                                        color: widget.message.isError
+                                            ? colorScheme.onErrorContainer
+                                            : colorScheme.onSurfaceVariant,
+                                        fontFamily: 'monospace',
+                                        backgroundColor: colorScheme.surface
+                                            .withOpacity(0.3),
+                                      ),
+                                    ),
+                                    onTapLink: (text, href, title) {
+                                      if (href != null) {
+                                        launchUrl(Uri.parse(href),
+                                            mode:
+                                                LaunchMode.externalApplication);
+                                      }
+                                    },
+                                  ),
+                                  // Show streaming indicator for partial messages
+                                  if (widget.message.isPartial) ...[
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: colorScheme.primary
+                                                .withOpacity(0.6),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          widget.message.content.isEmpty
+                                              ? 'Thinking...'
+                                              : 'Streaming...',
+                                          style: (Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall ??
+                                                  const TextStyle())
+                                              .copyWith(
+                                            color: colorScheme.onSurfaceVariant
+                                                .withOpacity(0.7),
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              )
+                            else
+                              SelectableText(
+                                widget.message.content,
+                                style:
+                                    (Theme.of(context).textTheme.bodyMedium ??
+                                            const TextStyle())
+                                        .copyWith(
+                                  color: colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                            if (!isUser && widget.message.source != null) ...[
+                              const SizedBox(height: 8),
+                              _buildSourceBadge(context),
                             ],
                           ],
-                        )
-                      else
-                        SelectableText(
-                          widget.message.content,
-                          style:
-                              (Theme.of(context).textTheme.bodyMedium ??
-                                  const TextStyle())
-                                  .copyWith(
-                                    color: colorScheme.onPrimaryContainer,
-                                  ),
                         ),
-                      if (!isUser && widget.message.source != null) ...[
-                        const SizedBox(height: 8),
-                        _buildSourceBadge(context),
-                      ],
+                      ),
+                      // Copy button for non-user messages
+                      if (!isUser &&
+                          _isHovering &&
+                          widget.message.content.isNotEmpty)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Material(
+                            color: colorScheme.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            elevation: 2,
+                            child: IconButton(
+                              icon: const Icon(Icons.copy, size: 16),
+                              iconSize: 16,
+                              padding: const EdgeInsets.all(8),
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              onPressed: () => _copyToClipboard(context),
+                              tooltip: 'Copy to clipboard',
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                ),
-                // Copy button for non-user messages
-                if (!isUser && _isHovering && widget.message.content.isNotEmpty)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Material(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      elevation: 2,
-                      child: IconButton(
-                        icon: const Icon(Icons.copy, size: 16),
-                        iconSize: 16,
-                        padding: const EdgeInsets.all(8),
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        onPressed: () => _copyToClipboard(context),
-                        tooltip: 'Copy to clipboard',
-                        color: colorScheme.onSurface,
-                      ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTime(widget.message.timestamp),
+                    style: (Theme.of(context).textTheme.bodySmall ??
+                            const TextStyle())
+                        .copyWith(
+                      color: colorScheme.onSurface.withOpacity(0.5),
                     ),
                   ),
-              ],
+                ],
+              ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              _formatTime(widget.message.timestamp),
-              style: (Theme.of(context).textTheme.bodySmall ??
-                  const TextStyle())
-                  .copyWith(
-                    color: colorScheme.onSurface.withOpacity(0.5),
-                  ),
-            ),
+            if (isUser) ...[
+              const SizedBox(width: 8),
+              CircleAvatar(
+                backgroundColor: colorScheme.primary,
+                child: Icon(Icons.person, color: colorScheme.onPrimary),
+              ),
+            ],
           ],
         ),
       ),
-      if (isUser) ...[
-        const SizedBox(width: 8),
-        CircleAvatar(
-          backgroundColor: colorScheme.primary,
-          child: Icon(Icons.person, color: colorScheme.onPrimary),
-        ),
-      ],
-    ],
-  ),
-),
     );
   }
 
@@ -354,12 +362,11 @@ class _ChatBubbleState extends State<ChatBubble> {
         const SizedBox(width: 4),
         Text(
           label,
-          style: (Theme.of(context).textTheme.bodySmall ??
-              const TextStyle())
+          style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle())
               .copyWith(
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         if (widget.message.wasPrivacyFiltered) ...[
           const SizedBox(width: 8),
@@ -367,12 +374,11 @@ class _ChatBubbleState extends State<ChatBubble> {
           const SizedBox(width: 2),
           Text(
             'Privacy Filtered',
-            style: (Theme.of(context).textTheme.bodySmall ??
-                const TextStyle())
+            style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle())
                 .copyWith(
-                  color: colorScheme.primary,
-                  fontWeight: FontWeight.w500,
-                ),
+              color: colorScheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ],
