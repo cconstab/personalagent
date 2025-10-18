@@ -124,7 +124,9 @@ class AtClientService {
       final metadata = Metadata()
         ..isPublic = false
         ..isEncrypted = true
-        ..namespaceAware = true;
+        ..namespaceAware = true
+        ..ttl =
+            300000; // 5 minutes (300 seconds) - queries expire if agent offline
 
       final atKey = AtKey()
         ..key = 'query'

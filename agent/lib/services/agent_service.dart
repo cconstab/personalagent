@@ -66,12 +66,14 @@ class AgentService {
       final mutexAcquired = await _tryAcquireQueryMutex(query);
       if (!mutexAcquired) {
         _logger.info(
-            '🤷‍♂️ Will not handle query ${query.id} - another agent instance will handle this');
+          '🤷‍♂️ Will not handle query ${query.id} - another agent instance will handle this',
+        );
         return; // Another agent instance acquired the mutex, so we skip this query
       }
 
       _logger.info(
-          '😎 Acquired mutex for query ${query.id} - this agent will respond');
+        '😎 Acquired mutex for query ${query.id} - this agent will respond',
+      );
 
       // Process the query
       final response = await processQuery(query);
@@ -80,7 +82,7 @@ class AgentService {
       await atPlatform.sendResponse(query.userId, response);
 
       _logger.info('✅ Sent response to ${query.userId}');
-      // Note: Mutex will auto-expire after 30 seconds (TTL)
+      // Note: Mutex will auto-expire after 1 hour (TTL)
     } catch (e, stackTrace) {
       _logger.severe('Failed to handle query', e, stackTrace);
 
@@ -118,21 +120,25 @@ class AgentService {
       // Create mutex key: {notificationId}.query_mutexes.personalagent{agentAtSign}
       final mutexAcquired = await atPlatform.tryAcquireMutex(
         mutexId: mutexId,
-        ttlSeconds: 30, // Expire after 30 seconds to keep datastore clean
+        ttlSeconds:
+            3600, // Expire after 1 hour - query TTL (5 min) prevents stale queries
       );
 
       if (mutexAcquired) {
         _logger.info(
-            '😎 Acquired mutex for notification $mutexId (query ${query.id})');
+          '😎 Acquired mutex for notification $mutexId (query ${query.id})',
+        );
         return true;
       } else {
         _logger.info(
-            '🤷‍♂️ Did not acquire mutex for notification $mutexId (another agent instance will handle this)');
+          '🤷‍♂️ Did not acquire mutex for notification $mutexId (another agent instance will handle this)',
+        );
         return false;
       }
     } catch (e) {
       _logger.warning(
-          'Error acquiring mutex, proceeding anyway to maintain functionality: $e');
+        'Error acquiring mutex, proceeding anyway to maintain functionality: $e',
+      );
       return true; // Proceed anyway if there's an unexpected error
     }
   }
@@ -145,7 +151,8 @@ class AgentService {
       // Check if user requested Ollama-only mode
       if (query.useOllamaOnly) {
         _logger.info(
-            '🔒 User requested Ollama-only mode - 100% private processing');
+          '🔒 User requested Ollama-only mode - 100% private processing',
+        );
         final context = await _retrieveContext(query);
         return await _processWithOllama(query, context);
       }
@@ -210,19 +217,22 @@ class AgentService {
     _logger.info('Processing with Ollama only (fully private)');
 
     // Agents are now stateless - conversation history comes from the app
-    final hasHistory = query.conversationHistory != null &&
+    final hasHistory =
+        query.conversationHistory != null &&
         query.conversationHistory!.isNotEmpty;
 
     if (hasHistory) {
       _logger.info(
-          '📝 Using conversation history from app (${query.conversationHistory!.length} messages)');
+        '📝 Using conversation history from app (${query.conversationHistory!.length} messages)',
+      );
       _logger.info('🔍 History contents:');
       for (var i = 0; i < query.conversationHistory!.length; i++) {
         final msg = query.conversationHistory![i];
         final role = msg['role'] ?? 'unknown';
         final content = msg['content'] ?? '';
-        final preview =
-            content.length > 50 ? '${content.substring(0, 50)}...' : content;
+        final preview = content.length > 50
+            ? '${content.substring(0, 50)}...'
+            : content;
         _logger.info('   [$i] $role: $preview');
       }
     } else {
@@ -252,8 +262,9 @@ Respond naturally and conversationally.
       for (var msg in query.conversationHistory!) {
         final role = msg['role'] ?? 'user';
         final content = msg['content'] ?? '';
-        promptBuffer
-            .write('${role == 'user' ? 'User' : 'Assistant'}: $content\n');
+        promptBuffer.write(
+          '${role == 'user' ? 'User' : 'Assistant'}: $content\n',
+        );
       }
     }
 
@@ -266,7 +277,8 @@ Respond naturally and conversationally.
     promptBuffer.write('User: ${query.content}');
 
     _logger.info(
-        '🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming');
+      '🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming',
+    );
 
     // Stream the response and send incremental updates
     // Use batching to reduce atPlatform notification overhead
@@ -286,9 +298,11 @@ Respond naturally and conversationally.
         fullResponse.write(chunk.response);
         charsSinceLastSend += chunk.response.length;
 
-        final timeSinceLastSend =
-            DateTime.now().difference(lastSendTime).inMilliseconds;
-        final shouldSend = chunk.done ||
+        final timeSinceLastSend = DateTime.now()
+            .difference(lastSendTime)
+            .inMilliseconds;
+        final shouldSend =
+            chunk.done ||
             charsSinceLastSend >= minCharsBeforeSend ||
             timeSinceLastSend >= sendIntervalMs;
 
@@ -307,7 +321,8 @@ Respond naturally and conversationally.
           );
 
           _logger.info(
-              '📤 Sending ${chunk.done ? 'FINAL' : 'PARTIAL'} chunk #$chunkIndex (${fullResponse.length} chars, isPartial: ${!chunk.done})');
+            '📤 Sending ${chunk.done ? 'FINAL' : 'PARTIAL'} chunk #$chunkIndex (${fullResponse.length} chars, isPartial: ${!chunk.done})',
+          );
 
           // Fire-and-forget for better performance (don't await)
           atPlatform.sendResponse(query.userId, partialMessage).catchError((e) {
@@ -319,7 +334,8 @@ Respond naturally and conversationally.
 
           if (chunk.done) {
             _logger.info(
-                '✅ Streaming complete. Sent ${chunkIndex} batched updates.');
+              '✅ Streaming complete. Sent ${chunkIndex} batched updates.',
+            );
           }
         }
       }
@@ -352,19 +368,22 @@ Respond naturally and conversationally.
     _logger.info('Processing with hybrid approach (Ollama + Claude)');
 
     // Agents are now stateless - use conversation history from app
-    final hasHistory = query.conversationHistory != null &&
+    final hasHistory =
+        query.conversationHistory != null &&
         query.conversationHistory!.isNotEmpty;
 
     // Build brief conversation history for Claude (last 2-3 exchanges only to save tokens)
     String conversationContext = '';
     if (hasHistory) {
       final recentHistory = query.conversationHistory!.length > 6
-          ? query.conversationHistory!
-              .sublist(query.conversationHistory!.length - 6)
+          ? query.conversationHistory!.sublist(
+              query.conversationHistory!.length - 6,
+            )
           : query.conversationHistory!;
 
       _logger.info(
-          'Including ${recentHistory.length} recent messages for Claude context');
+        'Including ${recentHistory.length} recent messages for Claude context',
+      );
       for (final msg in recentHistory) {
         final role = msg['role'] == 'user' ? 'User' : 'Assistant';
         conversationContext += '$role: ${msg['content']}\n';
@@ -413,11 +432,13 @@ $claudeResponseContent
       for (var msg in query.conversationHistory!) {
         final role = msg['role'] ?? 'user';
         final content = msg['content'] ?? '';
-        promptBuffer
-            .write('${role == 'user' ? 'User' : 'Assistant'}: $content\n');
+        promptBuffer.write(
+          '${role == 'user' ? 'User' : 'Assistant'}: $content\n',
+        );
       }
       promptBuffer.write(
-          '\nGeneral knowledge to help answer:\n$claudeResponseContent\n\n');
+        '\nGeneral knowledge to help answer:\n$claudeResponseContent\n\n',
+      );
     }
 
     promptBuffer.write('User: ${query.content}');
@@ -439,9 +460,11 @@ $claudeResponseContent
         fullResponse.write(chunk.response);
         charsSinceLastSend += chunk.response.length;
 
-        final timeSinceLastSend =
-            DateTime.now().difference(lastSendTime).inMilliseconds;
-        final shouldSend = chunk.done ||
+        final timeSinceLastSend = DateTime.now()
+            .difference(lastSendTime)
+            .inMilliseconds;
+        final shouldSend =
+            chunk.done ||
             charsSinceLastSend >= minCharsBeforeSend ||
             timeSinceLastSend >= sendIntervalMs;
 
@@ -469,7 +492,8 @@ $claudeResponseContent
 
           if (chunk.done) {
             _logger.info(
-                '✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates.');
+              '✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates.',
+            );
           }
         }
       }
