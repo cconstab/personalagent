@@ -1,53 +1,102 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
 
-class ChatBubble extends StatelessWidget {
+class ChatBubble extends StatefulWidget {
   final ChatMessage message;
 
   const ChatBubble({super.key, required this.message});
 
   @override
+  State<ChatBubble> createState() => _ChatBubbleState();
+}
+
+class _ChatBubbleState extends State<ChatBubble> {
+  bool _isHovering = false;
+
+  Future<void> _copyToClipboard(BuildContext context) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.message.content));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Copied to clipboard'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      // Silently fail - clipboard operations can fail in some contexts
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to copy to clipboard'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isUser = message.isUser;
+    final isUser = widget.message.isUser;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            CircleAvatar(
-              backgroundColor: message.isError
-                  ? colorScheme.error
-                  : colorScheme.primaryContainer,
-              child: Icon(
-                message.isError ? Icons.error_outline : Icons.smart_toy,
-                color: message.isError
-                    ? colorScheme.onError
-                    : colorScheme.onPrimaryContainer,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          mainAxisAlignment:
+              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isUser) ...[
+              CircleAvatar(
+                backgroundColor: widget.message.isError
+                    ? colorScheme.error
+                    : colorScheme.primaryContainer,
+                child: Icon(
+                  widget.message.isError ? Icons.error_outline : Icons.smart_toy,
+                  color: widget.message.isError
+                      ? colorScheme.onError
+                      : colorScheme.onPrimaryContainer,
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Column(
-              crossAxisAlignment:
-                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isUser
-                        ? colorScheme.primaryContainer
-                        : message.isError
-                            ? colorScheme.errorContainer
-                            : colorScheme.surfaceVariant,
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Column(
+                crossAxisAlignment:
+                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isUser
+                              ? colorScheme.primaryContainer
+                              : widget.message.isError
+                                  ? colorScheme.errorContainer
+                                  : colorScheme.surfaceVariant,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
@@ -58,36 +107,39 @@ class ChatBubble extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (!isUser && message.agentName != null) ...[
+                      if (!isUser && widget.message.agentName != null) ...[
                         Row(
                           children: [
                             Text(
-                              message.agentName!,
-                              style: Theme.of(context)
+                              widget.message.agentName ?? '',
+                              style: (Theme.of(context)
                                   .textTheme
-                                  .labelSmall
-                                  ?.copyWith(
+                                  .labelSmall ??
+                                  const TextStyle())
+                                  .copyWith(
                                     color: colorScheme.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
                             ),
-                            if (message.model != null) ...[
+                            if (widget.message.model != null) ...[
                               Text(
                                 ' • ',
-                                style: Theme.of(context)
+                                style: (Theme.of(context)
                                     .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
+                                    .labelSmall ??
+                                    const TextStyle())
+                                    .copyWith(
                                       color: colorScheme.onSurfaceVariant,
                                     ),
                               ),
                               Flexible(
                                 child: Text(
-                                  message.model!,
-                                  style: Theme.of(context)
+                                  widget.message.model ?? '',
+                                  style: (Theme.of(context)
                                       .textTheme
-                                      .labelSmall
-                                      ?.copyWith(
+                                      .labelSmall ??
+                                      const TextStyle())
+                                      .copyWith(
                                         color: colorScheme.onSurfaceVariant,
                                         fontStyle: FontStyle.italic,
                                       ),
@@ -105,48 +157,53 @@ class ChatBubble extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             MarkdownBody(
-                              data: message.content,
-                              selectable: true,
-                              styleSheet: MarkdownStyleSheet(
-                                p: Theme.of(context)
+                              data: widget.message.content,
+                              selectable: false,
+                              styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                p: (Theme.of(context)
                                     .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: message.isError
+                                    .bodyMedium ??
+                                    const TextStyle())
+                                    .copyWith(
+                                      color: widget.message.isError
                                           ? colorScheme.onErrorContainer
                                           : colorScheme.onSurfaceVariant,
                                     ),
-                                strong: Theme.of(context)
+                                strong: (Theme.of(context)
                                     .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: message.isError
+                                    .bodyMedium ??
+                                    const TextStyle())
+                                    .copyWith(
+                                      color: widget.message.isError
                                           ? colorScheme.onErrorContainer
                                           : colorScheme.onSurfaceVariant,
                                       fontWeight: FontWeight.bold,
                                     ),
-                                em: Theme.of(context)
+                                em: (Theme.of(context)
                                     .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: message.isError
+                                    .bodyMedium ??
+                                    const TextStyle())
+                                    .copyWith(
+                                      color: widget.message.isError
                                           ? colorScheme.onErrorContainer
                                           : colorScheme.onSurfaceVariant,
                                       fontStyle: FontStyle.italic,
                                     ),
-                                listBullet: Theme.of(context)
+                                listBullet: (Theme.of(context)
                                     .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: message.isError
+                                    .bodyMedium ??
+                                    const TextStyle())
+                                    .copyWith(
+                                      color: widget.message.isError
                                           ? colorScheme.onErrorContainer
                                           : colorScheme.onSurfaceVariant,
                                     ),
-                                code: Theme.of(context)
+                                code: (Theme.of(context)
                                     .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: message.isError
+                                    .bodySmall ??
+                                    const TextStyle())
+                                    .copyWith(
+                                      color: widget.message.isError
                                           ? colorScheme.onErrorContainer
                                           : colorScheme.onSurfaceVariant,
                                       fontFamily: 'monospace',
@@ -162,7 +219,7 @@ class ChatBubble extends StatelessWidget {
                               },
                             ),
                             // Show streaming indicator for partial messages
-                            if (message.isPartial) ...[
+                            if (widget.message.isPartial) ...[
                               const SizedBox(height: 4),
                               Row(
                                 children: [
@@ -177,13 +234,14 @@ class ChatBubble extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    message.content.isEmpty
+                                    widget.message.content.isEmpty
                                         ? 'Thinking...'
                                         : 'Streaming...',
-                                    style: Theme.of(context)
+                                    style: (Theme.of(context)
                                         .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
+                                        .bodySmall ??
+                                        const TextStyle())
+                                        .copyWith(
                                           color: colorScheme.onSurfaceVariant
                                               .withOpacity(0.7),
                                           fontStyle: FontStyle.italic,
@@ -196,44 +254,74 @@ class ChatBubble extends StatelessWidget {
                         )
                       else
                         SelectableText(
-                          message.content,
+                          widget.message.content,
                           style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              (Theme.of(context).textTheme.bodyMedium ??
+                                  const TextStyle())
+                                  .copyWith(
                                     color: colorScheme.onPrimaryContainer,
                                   ),
                         ),
-                      if (!isUser && message.source != null) ...[
+                      if (!isUser && widget.message.source != null) ...[
                         const SizedBox(height: 8),
                         _buildSourceBadge(context),
                       ],
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatTime(message.timestamp),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurface.withOpacity(0.5),
+                // Copy button for non-user messages
+                if (!isUser && _isHovering && widget.message.content.isNotEmpty)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Material(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      elevation: 2,
+                      child: IconButton(
+                        icon: const Icon(Icons.copy, size: 16),
+                        iconSize: 16,
+                        padding: const EdgeInsets.all(8),
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        onPressed: () => _copyToClipboard(context),
+                        tooltip: 'Copy to clipboard',
+                        color: colorScheme.onSurface,
                       ),
-                ),
+                    ),
+                  ),
               ],
             ),
-          ),
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              backgroundColor: colorScheme.primary,
-              child: Icon(Icons.person, color: colorScheme.onPrimary),
+            const SizedBox(height: 4),
+            Text(
+              _formatTime(widget.message.timestamp),
+              style: (Theme.of(context).textTheme.bodySmall ??
+                  const TextStyle())
+                  .copyWith(
+                    color: colorScheme.onSurface.withOpacity(0.5),
+                  ),
             ),
           ],
-        ],
+        ),
       ),
+      if (isUser) ...[
+        const SizedBox(width: 8),
+        CircleAvatar(
+          backgroundColor: colorScheme.primary,
+          child: Icon(Icons.person, color: colorScheme.onPrimary),
+        ),
+      ],
+    ],
+  ),
+),
     );
   }
 
   Widget _buildSourceBadge(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final source = message.source;
+    final source = widget.message.source;
 
     IconData icon;
     String label;
@@ -266,18 +354,22 @@ class ChatBubble extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          style: (Theme.of(context).textTheme.bodySmall ??
+              const TextStyle())
+              .copyWith(
                 color: color,
                 fontWeight: FontWeight.w500,
               ),
         ),
-        if (message.wasPrivacyFiltered) ...[
+        if (widget.message.wasPrivacyFiltered) ...[
           const SizedBox(width: 8),
           Icon(Icons.shield_outlined, size: 12, color: colorScheme.primary),
           const SizedBox(width: 2),
           Text(
             'Privacy Filtered',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            style: (Theme.of(context).textTheme.bodySmall ??
+                const TextStyle())
+                .copyWith(
                   color: colorScheme.primary,
                   fontWeight: FontWeight.w500,
                 ),

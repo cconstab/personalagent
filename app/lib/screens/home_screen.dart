@@ -68,6 +68,12 @@ class _HomeScreenState extends State<HomeScreen> {
             content: Text('Failed to connect: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -174,9 +180,15 @@ class _HomeScreenState extends State<HomeScreen> {
               await agent.deleteConversation(conversation.id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Conversation deleted'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: const Text('Conversation deleted'),
+                    duration: const Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                    margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
                   ),
                 );
               }

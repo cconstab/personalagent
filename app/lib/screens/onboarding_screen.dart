@@ -209,9 +209,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               final newAtSign = atSignController.text.trim();
               if (newAtSign.isEmpty || newAtSign == '@') {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter an @sign'),
+                  SnackBar(
+                    content: const Text('Please enter an @sign'),
                     backgroundColor: Colors.orange,
+                    behavior: SnackBarBehavior.floating,
+                    margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
                   ),
                 );
                 return;
@@ -272,6 +278,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SnackBar(
             content: Text('$atSign removed from keychain'),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
           ),
         );
         // Refresh the dialog
@@ -284,6 +296,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SnackBar(
             content: Text('Failed to remove @sign: $e'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
           ),
         );
       }
@@ -352,6 +370,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SnackBar(
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
           ),
         );
       }
@@ -409,6 +433,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SnackBar(
             content: Text('Authentication failed: ${result.message}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
           ),
         );
       }
@@ -418,6 +448,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SnackBar(
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
           ),
         );
       }
@@ -439,6 +475,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         SnackBar(
           content: Text('✅ Authenticated as $atSign'),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
         ),
       );
     }
@@ -523,6 +565,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   '$atsign is already in your keychain. Use the sign-in option instead.'),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
             ),
           );
         }
@@ -635,6 +683,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 backgroundColor: Colors.red,
                 duration: const Duration(seconds: 8),
+                behavior: SnackBarBehavior.floating,
+                margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
               ),
             );
           }
@@ -650,6 +704,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SnackBar(
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).size.height - 100,
+                      left: 10,
+                      right: 10,
+                    ),
             duration: const Duration(seconds: 5),
           ),
         );

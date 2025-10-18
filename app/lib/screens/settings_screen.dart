@@ -73,7 +73,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                      content: Text('Agent @sign set to $formattedAtSign')),
+                    content: Text('Agent @sign set to $formattedAtSign'),
+                    behavior: SnackBarBehavior.floating,
+                    margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
+                  ),
                 );
               }
             },
@@ -92,7 +99,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (atSigns.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No @signs found in keychain')),
+        SnackBar(
+          content: const Text('No @signs found in keychain'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+            bottom: MediaQuery.of(context).size.height - 100,
+            left: 10,
+            right: 10,
+          ),
+        ),
       );
       return;
     }
@@ -171,6 +186,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SnackBar(
               content: Text('Already using $atSign'),
               backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
             ),
           );
         }
@@ -183,6 +204,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SnackBar(
             content: Text('Switching to $atSign...'),
             duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -231,6 +258,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SnackBar(
                 content: Text('✅ Switched to $atSign'),
                 backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+                margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
               ),
             );
           }
@@ -246,6 +279,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             content: Text('Failed to switch @sign: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -260,7 +299,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (atSigns.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No @signs found in keychain')),
+        SnackBar(
+          content: const Text('No @signs found in keychain'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(
+            bottom: MediaQuery.of(context).size.height - 100,
+            left: 10,
+            right: 10,
+          ),
+        ),
       );
       return;
     }
@@ -371,6 +418,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               SnackBar(
                 content: Text('$atSign removed from keychain'),
                 backgroundColor: Colors.green,
+                behavior: SnackBarBehavior.floating,
+                margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
               ),
             );
           }
@@ -387,6 +440,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SnackBar(
             content: Text('Failed to remove @sign: $e'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
           ),
         );
       }
@@ -448,6 +507,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? 'Ollama only mode enabled - 100% private'
                             : 'Hybrid mode enabled - uses Claude when needed',
                       ),
+                      behavior: SnackBarBehavior.floating,
+                      margin: EdgeInsets.only(
+              bottom: MediaQuery.of(context).size.height - 100,
+              left: 10,
+              right: 10,
+            ),
                     ),
                   );
                 },
