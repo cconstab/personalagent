@@ -96,6 +96,7 @@ class AgentService {
           wasPrivacyFiltered: false,
           agentName: agentName,
           model: ollama.model,
+          conversationId: query.conversationId, // Echo back conversation ID
         );
         await atPlatform.sendResponse(query.userId, errorResponse);
       } catch (sendError) {
@@ -190,6 +191,7 @@ class AgentService {
         confidenceScore: 0.0,
         agentName: agentName,
         model: ollama.model,
+        conversationId: query.conversationId, // Echo back conversation ID
       );
     }
   }
@@ -316,6 +318,7 @@ Respond naturally and conversationally.
             confidenceScore: 1.0,
             agentName: agentName,
             model: ollama.model,
+            conversationId: query.conversationId, // Echo back conversation ID
             isPartial: !chunk.done,
             chunkIndex: chunkIndex++,
           );
@@ -350,6 +353,7 @@ Respond naturally and conversationally.
       confidenceScore: 1.0,
       agentName: agentName,
       model: ollama.model,
+      conversationId: query.conversationId, // Echo back conversation ID
       isPartial: false,
     );
   }
@@ -478,6 +482,7 @@ $claudeResponseContent
             confidenceScore: analysis.confidence,
             agentName: agentName,
             model: '${ollama.model} + ${claude!.model}',
+            conversationId: query.conversationId, // Echo back conversation ID
             isPartial: !chunk.done,
             chunkIndex: chunkIndex++,
           );
@@ -508,6 +513,7 @@ $claudeResponseContent
       confidenceScore: analysis.confidence,
       agentName: agentName,
       model: '${ollama.model} + ${claude!.model}',
+      conversationId: query.conversationId, // Echo back conversation ID
       isPartial: false,
     );
   }

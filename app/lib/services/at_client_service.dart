@@ -79,6 +79,7 @@ class AtClientService {
     ChatMessage message, {
     bool useOllamaOnly = false,
     List<ChatMessage>? conversationHistory,
+    String? conversationId,
   }) async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized. Call initialize() first.');
@@ -118,6 +119,7 @@ class AtClientService {
         'timestamp': message.timestamp.toIso8601String(),
         'useOllamaOnly': useOllamaOnly,
         'conversationHistory': context, // Include conversation context
+        if (conversationId != null) 'conversationId': conversationId, // Include conversation ID for response routing
       };
 
       // Send as notification with same pattern as at_talk
@@ -154,6 +156,65 @@ class AtClientService {
       debugPrint('StackTrace: $stackTrace');
       rethrow;
     }
+  }
+
+  /// Save a short-lived mapping from queryId -> conversationId to atPlatform
+  /// This helps recover routing after app restarts or provider re-creation
+  Future<void> saveQueryMapping(String queryId, String conversationId,
+      {int ttlMilliseconds = 3600000}) async {
+    if (_atClient == null) {
+      debugPrint('⚠️ AtClient not initialized, cannot save query mapping');
+      return;
+    }
+
+    try {
+      final key = AtKey()
+        ..key = 'mapping.$queryId'
+        ..namespace = 'personalagent'
+        ..sharedWith = null
+        ..metadata = (Metadata()
+          ..ttl = ttlMilliseconds
+          ..ttr = -1
+          ..ccd = false);
+
+      final putResult = await _atClient!.put(
+        key,
+        conversationId,
+        putRequestOptions: PutRequestOptions()..useRemoteAtServer = true,
+      );
+
+      debugPrint('💾 Saved query mapping $queryId -> $conversationId');
+      debugPrint('   Commit: ${putResult ? "success" : "failed"}');
+    } catch (e, st) {
+      debugPrint('❌ Failed to save query mapping: $e');
+      debugPrint('StackTrace: $st');
+    }
+  }
+
+  /// Retrieve a previously saved query->conversation mapping, or null
+  Future<String?> getQueryMapping(String queryId) async {
+    if (_atClient == null) {
+      debugPrint('⚠️ AtClient not initialized, cannot load query mapping');
+      return null;
+    }
+
+    try {
+      final key = AtKey()
+        ..key = 'mapping.$queryId'
+        ..namespace = 'personalagent'
+        ..sharedWith = null;
+
+      final result = await _atClient!.get(key);
+      if (result.value != null) {
+        debugPrint('🔍 Found remote mapping for $queryId -> ${result.value}');
+        return result.value as String;
+      }
+    } catch (e, st) {
+      debugPrint('❌ Failed to load query mapping $queryId: $e');
+      debugPrint('StackTrace: $st');
+    }
+
+    return null;
   }
 
   /// Start listening for notifications from the agent
@@ -202,6 +263,7 @@ class AtClientService {
         model: responseData['model'] as String?,
         isPartial: responseData['metadata']?['isPartial'] ?? false,
         chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
+        conversationId: responseData['metadata']?['conversationId'] as String?, // Extract from metadata where agent puts it
       );
 
       // Emit the message to listeners
@@ -209,8 +271,10 @@ class AtClientService {
       if (message.isPartial) {
         debugPrint(
             '📦 Streaming chunk ${message.chunkIndex} received for ${message.id}');
+        debugPrint('   ConversationId: ${message.conversationId}');
       } else {
         debugPrint('✅ Final message received for ${message.id}');
+        debugPrint('   ConversationId: ${message.conversationId}');
       }
     } catch (e, stackTrace) {
       debugPrint('Failed to handle notification: $e');

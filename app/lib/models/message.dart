@@ -17,6 +17,9 @@ class ChatMessage {
   /// Sequence number for ordering streaming chunks
   final int? chunkIndex;
 
+  /// Conversation ID this message belongs to (for routing responses)
+  final String? conversationId;
+
   ChatMessage({
     required this.id,
     required this.content,
@@ -29,6 +32,7 @@ class ChatMessage {
     this.model,
     this.isPartial = false,
     this.chunkIndex,
+    this.conversationId,
   });
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +47,7 @@ class ChatMessage {
         if (model != null) 'model': model,
         'isPartial': isPartial,
         if (chunkIndex != null) 'chunkIndex': chunkIndex,
+        if (conversationId != null) 'conversationId': conversationId,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -63,6 +68,7 @@ class ChatMessage {
       model: json['model'] as String?,
       isPartial: json['isPartial'] as bool? ?? false,
       chunkIndex: json['chunkIndex'] as int?,
+      conversationId: json['conversationId'] as String?,
     );
   }
 
@@ -84,6 +90,7 @@ class ChatMessage {
       model: model,
       isPartial: isPartial ?? this.isPartial,
       chunkIndex: chunkIndex ?? this.chunkIndex,
+      conversationId: conversationId, // Preserve conversation ID
     );
   }
 }

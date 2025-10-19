@@ -13,6 +13,8 @@ class ConversationStorageService {
   static const String _conversationKeyPrefix = 'conversations';
   static const String _namespace = 'personalagent';
   static const int _ttlDays = 7;
+  // CRITICAL: at_commons Metadata.ttl is in MILLISECONDS
+  // 7 days = 7 * 24 * 60 * 60 * 1000 = 604,800,000 milliseconds
   static const int _ttlMilliseconds = _ttlDays * 24 * 60 * 60 * 1000;
 
   AtClient? _atClient;
@@ -41,6 +43,13 @@ class ConversationStorageService {
       return; // Silently return instead of throwing during initialization
     }
 
+    // Check if AtClient is authenticated (has a current @sign)
+    final currentAtSign = _atClient!.getCurrentAtSign();
+    if (currentAtSign == null) {
+      debugPrint('⚠️ AtClient not authenticated yet, cannot save conversation');
+      return; // Silently return instead of throwing during initialization
+    }
+
     try {
       // Create the atKey for this conversation
       final key = AtKey()
@@ -65,9 +74,12 @@ class ConversationStorageService {
 
       debugPrint(
           '💾 Saved conversation ${conversation.id} to atPlatform (remote)');
+      debugPrint('   @sign: $currentAtSign');
+      debugPrint('   Key: ${key.toString()}');
       debugPrint('   Title: ${conversation.title}');
       debugPrint('   Messages: ${conversation.messages.length}');
-      debugPrint('   TTL: $_ttlDays days');
+      debugPrint('   TTL: $_ttlMilliseconds ms ($_ttlDays days)');
+      debugPrint('   useRemoteAtServer: true');
       debugPrint('   Commit: ${putResult ? "success" : "failed"}');
     } catch (e) {
       debugPrint('❌ Error saving conversation: $e');
@@ -97,7 +109,9 @@ class ConversationStorageService {
       debugPrint('🔍 Loading conversations from atPlatform...');
       debugPrint('   Current @sign: $currentAtSign');
       debugPrint('   Regex pattern: $regex');
-
+      
+      // getAtKeys fetches from local storage
+      // We use useRemoteAtServer=true on put/get to ensure data is on remote
       final keys = await _atClient!.getAtKeys(regex: regex);
 
       debugPrint('💾 Found ${keys.length} conversation keys');
@@ -110,11 +124,11 @@ class ConversationStorageService {
         debugPrint('   3. Different @sign than before');
       }
 
-      // Load each conversation
-      // Note: getAtKeys already syncs from remote, so get() will have latest data
+      // Load each conversation directly from atPlatform
+      // getAtKeys returns keys that exist, get() fetches their values
       for (final keyString in keys) {
         try {
-          // keyString is already an AtKey, not a String
+          // keyString is already an AtKey
           final result = await _atClient!.get(keyString);
 
           if (result.value != null) {
@@ -124,6 +138,8 @@ class ConversationStorageService {
 
             debugPrint(
                 '   ✓ Loaded: ${conversation.title} (${conversation.messages.length} msgs)');
+          } else {
+            debugPrint('   ⚠️ Key exists but value is null: $keyString');
           }
         } catch (e) {
           debugPrint('   ✗ Error loading conversation $keyString: $e');
@@ -151,9 +167,14 @@ class ConversationStorageService {
       return; // Silently return instead of throwing during initialization
     }
 
-    try {
-      final currentAtSign = _atClient!.getCurrentAtSign();
+    // Check if AtClient is authenticated (has a current @sign)
+    final currentAtSign = _atClient!.getCurrentAtSign();
+    if (currentAtSign == null) {
+      debugPrint('⚠️ AtClient not authenticated yet, cannot delete conversation');
+      return; // Silently return instead of throwing during initialization
+    }
 
+    try {
       // Create the atKey to delete - must match exactly how it was saved
       final key = AtKey()
         ..key = '$_conversationKeyPrefix.$conversationId'

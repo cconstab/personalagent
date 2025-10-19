@@ -45,6 +45,7 @@ class QueryMessage extends AgentMessage {
   final List<String>? contextKeys;
   final bool useOllamaOnly;
   final List<Map<String, dynamic>>? conversationHistory;
+  final String? conversationId; // For routing responses back to correct conversation
 
   /// The notification ID from atPlatform - used for mutex coordination
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -57,6 +58,7 @@ class QueryMessage extends AgentMessage {
     this.contextKeys,
     this.useOllamaOnly = false,
     this.conversationHistory,
+    this.conversationId,
     this.notificationId,
     DateTime? timestamp,
   }) : super(
@@ -80,6 +82,7 @@ class ResponseMessage extends AgentMessage {
   final double confidenceScore;
   final String? agentName;
   final String? model;
+  final String? conversationId; // Echo back for routing
 
   /// Whether this is a partial response (streaming in progress)
   final bool isPartial;
@@ -95,6 +98,7 @@ class ResponseMessage extends AgentMessage {
     this.confidenceScore = 1.0,
     this.agentName,
     this.model,
+    this.conversationId,
     this.isPartial = false,
     this.chunkIndex,
     DateTime? timestamp,
@@ -109,6 +113,7 @@ class ResponseMessage extends AgentMessage {
             'confidenceScore': confidenceScore,
             if (agentName != null) 'agentName': agentName,
             if (model != null) 'model': model,
+            if (conversationId != null) 'conversationId': conversationId,
             'isPartial': isPartial,
             if (chunkIndex != null) 'chunkIndex': chunkIndex,
           },

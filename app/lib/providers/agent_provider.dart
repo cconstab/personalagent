@@ -19,6 +19,10 @@ class AgentProvider extends ChangeNotifier {
 
   /// Map of query message ID -> conversation ID to route responses correctly
   final Map<String, String> _queryToConversationMap = {};
+  
+  /// Queue for messages that arrive before conversations are loaded
+  final List<ChatMessage> _pendingMessages = [];
+  bool _conversationsLoaded = false;
 
   List<Conversation> get conversations => List.unmodifiable(_conversations);
   Conversation? get currentConversation =>
@@ -29,19 +33,69 @@ class AgentProvider extends ChangeNotifier {
   bool get useOllamaOnly => _useOllamaOnly;
   AgentProvider() {
     _loadSettings();
-    _loadConversations();
-
+    // DON'T load conversations here - AtClient not initialized yet!
+    // Conversations will be loaded after onboarding via reloadConversations()
+    
     // Listen for incoming messages from agent (including streaming updates)
-    _atClientService.messageStream.listen((message) async {
-      // Find which conversation this response belongs to using the message ID
-      final conversationId = _queryToConversationMap[message.id];
+    _atClientService.messageStream.listen(_handleIncomingMessage);
+  }
+  
+  /// Handle incoming message from agent
+  Future<void> _handleIncomingMessage(ChatMessage message) async {
+      debugPrint('📨 Received message from agent: ${message.id}');
+      debugPrint('   isPartial: ${message.isPartial}');
+      debugPrint('   chunkIndex: ${message.chunkIndex}');
+      debugPrint('   Conversations loaded: ${_conversations.length}');
+      
+      // Check if we have any conversations loaded
+      if (_conversations.isEmpty && !_conversationsLoaded) {
+        debugPrint('⏳ Conversations not loaded yet - queueing message ${message.id}');
+        _pendingMessages.add(message);
+        return;
+      }
+      
+      if (_conversations.isEmpty) {
+        debugPrint('⚠️ WARNING: No conversations exist! Creating default conversation...');
+        await _createNewConversation();
+      }
+      
+      // Try to find which conversation this response belongs to
+      // First, check if the response includes conversationId (new stateless approach)
+      String? conversationId = message.conversationId;
+      
+      if (conversationId != null) {
+        debugPrint('✅ Using conversationId from response: $conversationId');
+      } else {
+        debugPrint('⚠️ No conversationId in response, checking fallback map...');
+      }
+      
+      // Fallback: Check the in-memory map (for backwards compatibility with old agents)
+      conversationId ??= _queryToConversationMap[message.id];
+      
+      if (conversationId == null) {
+        debugPrint('❌ No conversationId found in map either for message ${message.id}');
+        debugPrint('   Current map keys: ${_queryToConversationMap.keys.toList()}');
+        debugPrint('🔍 Checking atPlatform for persisted mapping...');
+        conversationId = await _atClientService.getQueryMapping(message.id);
+        if (conversationId != null) {
+          debugPrint('✅ Found persisted mapping: ${message.id} -> $conversationId');
+        }
+      } else {
+        debugPrint('📍 Found conversationId: $conversationId');
+      }
 
       if (conversationId != null) {
         // Find the conversation
-        final conversation = _conversations.firstWhere(
-          (c) => c.id == conversationId,
-          orElse: () => _conversations.first, // Fallback to first conversation
-        );
+        Conversation? conversation;
+        try {
+          conversation = _conversations.firstWhere((c) => c.id == conversationId);
+          debugPrint('✅ Found conversation: ${conversation.id} (${conversation.title})');
+        } catch (e) {
+          debugPrint('❌ Conversation $conversationId not found in loaded conversations!');
+          debugPrint('   Available conversations: ${_conversations.map((c) => c.id).toList()}');
+          debugPrint('   This response will be dropped to prevent misrouting');
+          return; // Don't add to wrong conversation
+        }
 
         // Check if this is a streaming update (partial message)
         if (message.isPartial) {
@@ -234,7 +288,6 @@ class AgentProvider extends ChangeNotifier {
       }
 
       notifyListeners();
-    });
   }
 
   Future<void> _loadSettings() async {
@@ -256,6 +309,11 @@ class AgentProvider extends ChangeNotifier {
   /// Reload conversations from atPlatform (useful for refreshing after app restart)
   Future<void> reloadConversations() async {
     debugPrint('🔄 Manually reloading conversations from atPlatform...');
+    
+    // CRITICAL: Re-initialize storage service to pick up new AtClient after @sign switch
+    // Without this, the service still points to the old @sign's AtClient
+    await _storageService.initialize();
+    
     await _loadConversations();
   }
 
@@ -279,7 +337,7 @@ class AgentProvider extends ChangeNotifier {
       if (!_storageService.isInitialized) {
         debugPrint(
             '⏳ AtClient not ready yet, will load conversations after initialization');
-        _createNewConversation();
+        await _createNewConversation();
         return;
       }
 
@@ -296,21 +354,41 @@ class AgentProvider extends ChangeNotifier {
       // Restore current conversation or create a new one
       if (currentId != null && _conversations.any((c) => c.id == currentId)) {
         _currentConversationId = currentId;
+        debugPrint('📌 Restored current conversation: $currentId');
       } else if (_conversations.isNotEmpty) {
         _currentConversationId = _conversations.first.id;
+        debugPrint('📌 Set current conversation to first: ${_currentConversationId}');
       } else {
         // Create first conversation
-        _createNewConversation();
+        await _createNewConversation();
+        debugPrint('📌 Created new conversation: $_currentConversationId');
       }
 
       debugPrint(
           '📚 Loaded ${_conversations.length} conversations from atPlatform');
+      debugPrint('📌 Current conversation ID: $_currentConversationId');
+      debugPrint('📌 Current conversation: ${currentConversation?.id} (${currentConversation?.messages.length} msgs)');
+      
+      // Mark conversations as loaded
+      _conversationsLoaded = true;
+      
+      // Process any pending messages that arrived before conversations were loaded
+      if (_pendingMessages.isNotEmpty) {
+        debugPrint('📬 Processing ${_pendingMessages.length} pending messages...');
+        final messagesToProcess = List<ChatMessage>.from(_pendingMessages);
+        _pendingMessages.clear();
+        for (final message in messagesToProcess) {
+          await _handleIncomingMessage(message);
+        }
+      }
+      
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error loading conversations: $e');
       debugPrint('   Stack trace: ${StackTrace.current}');
       // Create a default conversation on error
-      _createNewConversation();
+      await _createNewConversation();
+      notifyListeners(); // Notify UI after creating default conversation
     }
   }
 
@@ -351,20 +429,27 @@ class AgentProvider extends ChangeNotifier {
   }
 
   /// Create a new conversation and switch to it
-  void createNewConversation() {
-    _createNewConversation();
+  Future<void> createNewConversation() async {
+    await _createNewConversation();
     notifyListeners();
   }
 
-  void _createNewConversation() {
+  Future<void> _createNewConversation() async {
     final newConversation = Conversation(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: 'New Conversation',
     );
     _conversations.insert(0, newConversation);
     _currentConversationId = newConversation.id;
-    _saveConversation(newConversation); // Save to atPlatform
     debugPrint('💬 Created new conversation: ${newConversation.id}');
+    
+    // Try to save, but don't fail if AtClient not ready yet
+    try {
+      await _saveConversation(newConversation); // Save to atPlatform
+    } catch (e) {
+      debugPrint('⚠️ Could not save new conversation yet (will retry): $e');
+      // Conversation is still created in memory, just not persisted yet
+    }
   }
 
   /// Switch to a different conversation
@@ -403,7 +488,7 @@ class AgentProvider extends ChangeNotifier {
         if (_conversations.isNotEmpty) {
           await switchConversation(_conversations.first.id);
         } else {
-          _createNewConversation();
+          await _createNewConversation();
         }
       }
 
@@ -432,7 +517,7 @@ class AgentProvider extends ChangeNotifier {
 
     // Ensure we have a current conversation
     if (currentConversation == null) {
-      _createNewConversation();
+      await _createNewConversation();
     }
 
     debugPrint('📤 Attempting to send message...');
@@ -521,12 +606,20 @@ class AgentProvider extends ChangeNotifier {
       debugPrint(
           '📝 Including ${conversationHistory.length} previous messages for context');
 
-      // Send message to agent via atPlatform with conversation context
+      // Send message to agent via atPlatform with conversation context and ID
       await _atClientService.sendQuery(
         userMessage,
         useOllamaOnly: _useOllamaOnly,
         conversationHistory: conversationHistory,
+        conversationId: conversationIdForThisQuery, // Include conversation ID for stateless routing
       );
+
+      // Persist the mapping to atPlatform as well (short TTL, helpful after restarts/sign switches)
+      await _atClientService.saveQueryMapping(
+        userMessage.id,
+        conversationIdForThisQuery,
+      );
+      debugPrint('💾 Persisted query mapping to atPlatform');
 
       // Response will be received via messageStream listener
       // and added to messages automatically

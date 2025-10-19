@@ -214,10 +214,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
 
-      // Clear messages before switching
-      if (mounted) {
-        context.read<AgentProvider>().clearMessages();
-      }
+      // NOTE: We do NOT call clearMessages() here because it would save an empty
+      // conversation to atPlatform, destroying the conversation data!
+      // The conversations will be reloaded for the new @sign automatically.
 
       // Use AtOnboarding.changePrimaryAtsign to switch (like NoPorts)
       debugPrint('Calling changePrimaryAtsign...');
@@ -250,6 +249,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (result.status == AtOnboardingResultStatus.success) {
           // Update auth provider
           await context.read<AuthProvider>().authenticate(atSign);
+
+          // CRITICAL: Reload conversations for the new @sign
+          // Without this, the UI shows empty even though conversations exist
+          if (mounted) {
+            await context.read<AgentProvider>().reloadConversations();
+          }
 
           // Success! Close settings and stay on home screen
           if (mounted) {
@@ -644,8 +649,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       FilledButton(
                         onPressed: () async {
-                          // Clear messages before signing out
-                          context.read<AgentProvider>().clearMessages();
+                          // NOTE: We do NOT call clearMessages() here because it would save an empty
+                          // conversation to atPlatform, destroying the conversation data!
+                          // The in-memory state will be cleared when the app restarts.
                           await context.read<AuthProvider>().signOut();
                           if (context.mounted) {
                             // Pop all routes to return to the front screen (onboarding)
