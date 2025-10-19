@@ -119,7 +119,9 @@ class AtClientService {
         'timestamp': message.timestamp.toIso8601String(),
         'useOllamaOnly': useOllamaOnly,
         'conversationHistory': context, // Include conversation context
-        if (conversationId != null) 'conversationId': conversationId, // Include conversation ID for response routing
+        if (conversationId != null)
+          'conversationId':
+              conversationId, // Include conversation ID for response routing
       };
 
       // Send as notification with same pattern as at_talk
@@ -263,7 +265,8 @@ class AtClientService {
         model: responseData['model'] as String?,
         isPartial: responseData['metadata']?['isPartial'] ?? false,
         chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
-        conversationId: responseData['metadata']?['conversationId'] as String?, // Extract from metadata where agent puts it
+        conversationId: responseData['metadata']?['conversationId']
+            as String?, // Extract from metadata where agent puts it
       );
 
       // Emit the message to listeners

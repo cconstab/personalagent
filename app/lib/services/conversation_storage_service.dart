@@ -109,7 +109,7 @@ class ConversationStorageService {
       debugPrint('🔍 Loading conversations from atPlatform...');
       debugPrint('   Current @sign: $currentAtSign');
       debugPrint('   Regex pattern: $regex');
-      
+
       // getAtKeys fetches from local storage
       // We use useRemoteAtServer=true on put/get to ensure data is on remote
       final keys = await _atClient!.getAtKeys(regex: regex);
@@ -170,7 +170,8 @@ class ConversationStorageService {
     // Check if AtClient is authenticated (has a current @sign)
     final currentAtSign = _atClient!.getCurrentAtSign();
     if (currentAtSign == null) {
-      debugPrint('⚠️ AtClient not authenticated yet, cannot delete conversation');
+      debugPrint(
+          '⚠️ AtClient not authenticated yet, cannot delete conversation');
       return; // Silently return instead of throwing during initialization
     }
 

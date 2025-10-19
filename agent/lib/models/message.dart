@@ -3,12 +3,7 @@ import 'package:json_annotation/json_annotation.dart';
 part 'message.g.dart';
 
 /// Types of messages exchanged between app and agent
-enum MessageType {
-  query,
-  response,
-  contextUpdate,
-  error,
-}
+enum MessageType { query, response, contextUpdate, error }
 
 /// Source of the AI response
 enum ResponseSource {
@@ -45,7 +40,8 @@ class QueryMessage extends AgentMessage {
   final List<String>? contextKeys;
   final bool useOllamaOnly;
   final List<Map<String, dynamic>>? conversationHistory;
-  final String? conversationId; // For routing responses back to correct conversation
+  final String?
+  conversationId; // For routing responses back to correct conversation
 
   /// The notification ID from atPlatform - used for mutex coordination
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -62,11 +58,11 @@ class QueryMessage extends AgentMessage {
     this.notificationId,
     DateTime? timestamp,
   }) : super(
-          id: id,
-          type: MessageType.query,
-          content: content,
-          timestamp: timestamp ?? DateTime.now(),
-        );
+         id: id,
+         type: MessageType.query,
+         content: content,
+         timestamp: timestamp ?? DateTime.now(),
+       );
 
   factory QueryMessage.fromJson(Map<String, dynamic> json) =>
       _$QueryMessageFromJson(json);
@@ -103,21 +99,21 @@ class ResponseMessage extends AgentMessage {
     this.chunkIndex,
     DateTime? timestamp,
   }) : super(
-          id: id,
-          type: MessageType.response,
-          content: content,
-          timestamp: timestamp ?? DateTime.now(),
-          metadata: {
-            'source': source.name,
-            'wasPrivacyFiltered': wasPrivacyFiltered,
-            'confidenceScore': confidenceScore,
-            if (agentName != null) 'agentName': agentName,
-            if (model != null) 'model': model,
-            if (conversationId != null) 'conversationId': conversationId,
-            'isPartial': isPartial,
-            if (chunkIndex != null) 'chunkIndex': chunkIndex,
-          },
-        );
+         id: id,
+         type: MessageType.response,
+         content: content,
+         timestamp: timestamp ?? DateTime.now(),
+         metadata: {
+           'source': source.name,
+           'wasPrivacyFiltered': wasPrivacyFiltered,
+           'confidenceScore': confidenceScore,
+           if (agentName != null) 'agentName': agentName,
+           if (model != null) 'model': model,
+           if (conversationId != null) 'conversationId': conversationId,
+           'isPartial': isPartial,
+           if (chunkIndex != null) 'chunkIndex': chunkIndex,
+         },
+       );
 
   factory ResponseMessage.fromJson(Map<String, dynamic> json) =>
       _$ResponseMessageFromJson(json);
