@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message.dart';
 import '../models/conversation.dart';
@@ -23,6 +24,22 @@ class AgentProvider extends ChangeNotifier {
   /// Queue for messages that arrive before conversations are loaded
   final List<ChatMessage> _pendingMessages = [];
   bool _conversationsLoaded = false;
+  
+  /// Flag to prevent notifyListeners during pointer events (prevents mouse_tracker assertion)
+  bool _notificationScheduled = false;
+  
+  /// Safely notify listeners, deferring to next frame if needed
+  /// This prevents "Failed assertion: !_debugDuringDeviceUpdate" errors
+  void _safeNotifyListeners() {
+    if (_notificationScheduled) return;
+    
+    _notificationScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _notificationScheduled = false;
+      if (!hasListeners) return;
+      notifyListeners();
+    });
+  }
 
   List<Conversation> get conversations => List.unmodifiable(_conversations);
   Conversation? get currentConversation =>
@@ -150,7 +167,7 @@ class AgentProvider extends ChangeNotifier {
 
           // Don't save to atPlatform yet (wait for final message)
           // Just notify UI to update
-          notifyListeners();
+          _safeNotifyListeners();
         } else {
           // This is the final complete message
           debugPrint('📬 Received FINAL message ${message.id}');
@@ -254,7 +271,7 @@ class AgentProvider extends ChangeNotifier {
                 debugPrint('➕ Added new streaming message in fallback path');
               }
             }
-            notifyListeners();
+            _safeNotifyListeners();
           } else {
             // Final message
             // Search for existing AGENT message (not user message)
@@ -287,13 +304,13 @@ class AgentProvider extends ChangeNotifier {
         }
       }
 
-      notifyListeners();
+      _safeNotifyListeners();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _useOllamaOnly = prefs.getBool('useOllamaOnly') ?? false;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   /// Initialize the conversation storage service
@@ -382,13 +399,13 @@ class AgentProvider extends ChangeNotifier {
         }
       }
       
-      notifyListeners();
+      _safeNotifyListeners();
     } catch (e) {
       debugPrint('❌ Error loading conversations: $e');
       debugPrint('   Stack trace: ${StackTrace.current}');
       // Create a default conversation on error
       await _createNewConversation();
-      notifyListeners(); // Notify UI after creating default conversation
+      _safeNotifyListeners(); // Notify UI after creating default conversation
     }
   }
 
@@ -416,14 +433,14 @@ class AgentProvider extends ChangeNotifier {
   void setAgentAtSign(String atSign) {
     _agentAtSign = atSign;
     _atClientService.setAgentAtSign(atSign);
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   Future<void> setUseOllamaOnly(bool value) async {
     _useOllamaOnly = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('useOllamaOnly', value);
-    notifyListeners();
+    _safeNotifyListeners();
 
     debugPrint('🔧 Ollama-only mode: ${value ? "ENABLED" : "DISABLED"}');
   }
@@ -431,7 +448,7 @@ class AgentProvider extends ChangeNotifier {
   /// Create a new conversation and switch to it
   Future<void> createNewConversation() async {
     await _createNewConversation();
-    notifyListeners();
+    _safeNotifyListeners();
   }
 
   Future<void> _createNewConversation() async {
@@ -459,7 +476,7 @@ class AgentProvider extends ChangeNotifier {
       // Save current conversation ID to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('currentConversationId', conversationId);
-      notifyListeners();
+      _safeNotifyListeners();
       debugPrint('🔄 Switched to conversation: $conversationId');
     }
   }
@@ -492,7 +509,7 @@ class AgentProvider extends ChangeNotifier {
         }
       }
 
-      notifyListeners();
+      _safeNotifyListeners();
       debugPrint('✅ Deleted conversation $conversationId completely');
     } catch (e) {
       debugPrint('❌ Error deleting conversation: $e');
@@ -508,7 +525,7 @@ class AgentProvider extends ChangeNotifier {
     conversation.updatedAt = DateTime.now(); // Refreshes TTL
     await _saveConversation(
         conversation); // Save to atPlatform with refreshed TTL
-    notifyListeners();
+    _safeNotifyListeners();
     debugPrint('✏️ Renamed conversation $conversationId to: $newTitle');
   }
 
@@ -536,7 +553,7 @@ class AgentProvider extends ChangeNotifier {
         isError: true,
       );
       currentConversation!.messages.add(errorMessage);
-      notifyListeners();
+      _safeNotifyListeners();
       return;
     }
 
@@ -552,7 +569,7 @@ class AgentProvider extends ChangeNotifier {
         isError: true,
       );
       currentConversation!.messages.add(errorMessage);
-      notifyListeners();
+      _safeNotifyListeners();
       return;
     }
 
@@ -593,7 +610,7 @@ class AgentProvider extends ChangeNotifier {
     _isProcessing = true;
     await _saveConversation(
         currentConversation!); // Save to atPlatform with refreshed TTL
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       // Get conversation history (all messages except the current user message and thinking placeholder)
@@ -637,7 +654,7 @@ class AgentProvider extends ChangeNotifier {
       _isProcessing = false;
       await _saveConversation(
           currentConversation!); // Save response to atPlatform
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -651,6 +668,6 @@ class AgentProvider extends ChangeNotifier {
       await _saveConversation(currentConversation!); // Save to atPlatform
     }
     _isProcessing = false;
-    notifyListeners();
+    _safeNotifyListeners();
   }
 }
