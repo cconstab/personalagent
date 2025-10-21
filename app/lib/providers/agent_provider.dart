@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message.dart';
 import '../models/conversation.dart';
@@ -25,17 +25,15 @@ class AgentProvider extends ChangeNotifier {
   final List<ChatMessage> _pendingMessages = [];
   bool _conversationsLoaded = false;
 
-  /// Flag to prevent notifyListeners during pointer events (prevents mouse_tracker assertion)
-  bool _notificationScheduled = false;
-
-  /// Safely notify listeners, deferring to next frame if needed
-  /// This prevents "Failed assertion: !_debugDuringDeviceUpdate" errors
+  /// Safely notify listeners immediately
+  /// Use scheduleMicrotask to avoid calling during build phase
   void _safeNotifyListeners() {
-    if (_notificationScheduled) return;
-
-    _notificationScheduled = true;
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      _notificationScheduled = false;
+    if (!hasListeners) return;
+    
+    // Use scheduleMicrotask instead of addPostFrameCallback
+    // This runs immediately after current code completes, not waiting for next frame
+    // This ensures updates happen even when window doesn't have focus
+    scheduleMicrotask(() {
       if (!hasListeners) return;
       notifyListeners();
     });
