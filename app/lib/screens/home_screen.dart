@@ -21,12 +21,21 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
+  final FocusNode _inputFocusNode = FocusNode();
   bool _isInitializing = false;
 
   @override
   void initState() {
     super.initState();
     _initializeAtClient();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _textController.dispose();
+    _inputFocusNode.dispose();
+    super.dispose();
   }
 
   Future<void> _initializeAtClient() async {
@@ -129,13 +138,6 @@ class _HomeScreenState extends State<HomeScreen> {
         '✅ Authenticated successfully with keychain as ${result.atsign}');
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _textController.dispose();
-    super.dispose();
-  }
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -155,6 +157,13 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<AgentProvider>().sendMessage(text);
     _textController.clear();
     _scrollToBottom();
+
+    // Request focus back to input field after sending
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_inputFocusNode.canRequestFocus) {
+        _inputFocusNode.requestFocus();
+      }
+    });
   }
 
   void _showDeleteCurrentConversationDialog(
@@ -335,9 +344,48 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
-          InputField(controller: _textController, onSend: _sendMessage),
         ],
       ),
+      // Place input field in bottomNavigationBar to isolate from body rebuilds
+      bottomNavigationBar: _PersistentInputField(
+        controller: _textController,
+        focusNode: _inputFocusNode,
+        onSend: _sendMessage,
+      ),
+    );
+  }
+}
+
+// Separate widget to keep input field from rebuilding when messages update
+// Uses StatefulWidget with AutomaticKeepAliveClientMixin to aggressively preserve state
+class _PersistentInputField extends StatefulWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onSend;
+
+  const _PersistentInputField({
+    required this.controller,
+    required this.focusNode,
+    required this.onSend,
+  });
+
+  @override
+  State<_PersistentInputField> createState() => _PersistentInputFieldState();
+}
+
+class _PersistentInputFieldState extends State<_PersistentInputField>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    return InputField(
+      key: const ValueKey('persistent_input_field'),
+      controller: widget.controller,
+      focusNode: widget.focusNode,
+      onSend: widget.onSend,
     );
   }
 }

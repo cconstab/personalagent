@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message.dart';
@@ -26,17 +25,9 @@ class AgentProvider extends ChangeNotifier {
   bool _conversationsLoaded = false;
 
   /// Safely notify listeners immediately
-  /// Use scheduleMicrotask to avoid calling during build phase
   void _safeNotifyListeners() {
     if (!hasListeners) return;
-    
-    // Use scheduleMicrotask instead of addPostFrameCallback
-    // This runs immediately after current code completes, not waiting for next frame
-    // This ensures updates happen even when window doesn't have focus
-    scheduleMicrotask(() {
-      if (!hasListeners) return;
-      notifyListeners();
-    });
+    notifyListeners();
   }
 
   List<Conversation> get conversations => List.unmodifiable(_conversations);

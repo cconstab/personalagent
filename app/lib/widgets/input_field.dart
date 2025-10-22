@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 
 class InputField extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final VoidCallback onSend;
 
-  const InputField({super.key, required this.controller, required this.onSend});
+  const InputField({
+    super.key,
+    required this.controller,
+    this.focusNode,
+    required this.onSend,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +28,7 @@ class InputField extends StatelessWidget {
             Expanded(
               child: TextField(
                 controller: controller,
+                focusNode: focusNode,
                 decoration: InputDecoration(
                   hintText: 'Ask me anything...',
                   border: OutlineInputBorder(
@@ -38,6 +45,9 @@ class InputField extends StatelessWidget {
                 maxLines: null,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => onSend(),
+                enableInteractiveSelection: true,
+                // Keep the text field in the widget tree with same identity
+                keyboardType: TextInputType.multiline,
               ),
             ),
             const SizedBox(width: 8),
