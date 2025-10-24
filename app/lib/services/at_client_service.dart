@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:at_client_mobile/at_client_mobile.dart';
 import 'package:at_commons/at_commons.dart';
+import 'package:at_stream/at_stream.dart';
 import 'package:flutter/foundation.dart';
 import '../models/message.dart';
+import 'stream_transformers.dart';
 
 /// Service for communicating with the agent via atPlatform
 class AtClientService {
@@ -42,10 +44,8 @@ class AtClientService {
       // Check if SDK is using wrong @sign
       if (currentAtSign != null && currentAtSign != atSign) {
         debugPrint('⚠️ SDK is using $currentAtSign but we want $atSign');
-        debugPrint(
-            '   This indicates AtOnboarding.onboard() did not switch @signs properly');
-        throw Exception(
-            'SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
+        debugPrint('   This indicates AtOnboarding.onboard() did not switch @signs properly');
+        throw Exception('SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
       }
 
       if (currentAtSign != null) {
@@ -58,8 +58,7 @@ class AtClientService {
         debugPrint('✅ Notification listener started');
       } else {
         // This shouldn't happen after successful onboarding
-        throw Exception(
-            'AtClient not initialized. Onboarding may not have completed successfully.');
+        throw Exception('AtClient not initialized. Onboarding may not have completed successfully.');
       }
     } catch (e, stackTrace) {
       debugPrint('❌ Failed to initialize AtClientService: $e');
@@ -93,8 +92,7 @@ class AtClientService {
       debugPrint('📤 Sending query to $_agentAtSign');
       debugPrint('   From: $_currentAtSign');
       debugPrint('   Ollama Only: $useOllamaOnly');
-      debugPrint(
-          '   With ${conversationHistory?.length ?? 0} previous messages');
+      debugPrint('   With ${conversationHistory?.length ?? 0} previous messages');
       debugPrint(
           '   Message: ${message.content.substring(0, message.content.length > 50 ? 50 : message.content.length)}...');
 
@@ -119,9 +117,7 @@ class AtClientService {
         'timestamp': message.timestamp.toIso8601String(),
         'useOllamaOnly': useOllamaOnly,
         'conversationHistory': context, // Include conversation context
-        if (conversationId != null)
-          'conversationId':
-              conversationId, // Include conversation ID for response routing
+        if (conversationId != null) 'conversationId': conversationId, // Include conversation ID for response routing
       };
 
       // Send as notification with same pattern as at_talk
@@ -129,8 +125,7 @@ class AtClientService {
         ..isPublic = false
         ..isEncrypted = true
         ..namespaceAware = true
-        ..ttl =
-            300000; // 5 minutes (300 seconds) - queries expire if agent offline
+        ..ttl = 300000; // 5 minutes (300 seconds) - queries expire if agent offline
 
       final atKey = AtKey()
         ..key = 'query'
@@ -160,10 +155,115 @@ class AtClientService {
     }
   }
 
+  /// Start listening for streaming responses from agent using at_stream
+  Future<void> startResponseStreamConnection() async {
+    if (_atClient == null) {
+      throw Exception('AtClient not initialized. Call initialize() first.');
+    }
+
+    if (_agentAtSign == null || _agentAtSign!.isEmpty) {
+      throw Exception('Agent @sign not set. Call setAgentAtSign() first.');
+    }
+
+    try {
+      debugPrint('🔌 Connecting to response stream from $_agentAtSign');
+
+      // Connect to agent's stream channel
+      final channel = await AtNotificationStreamChannel.connect<String, String>(
+        _atClient!,
+        otherAtsign: _agentAtSign!,
+        baseNamespace: 'personalagent',
+        domainNamespace: 'response',
+        sendTransformer: QuerySendTransformer(),
+        recvTransformer: MessageReceiveTransformer(),
+      );
+
+      debugPrint('✅ Connected to response stream channel');
+
+      // Listen for incoming messages from agent
+      channel.stream.listen(
+        (String responseJson) {
+          try {
+            debugPrint('📨 Received streamed response chunk');
+
+            // Parse JSON response
+            final responseData = json.decode(responseJson) as Map<String, dynamic>;
+            debugPrint('   Type: ${responseData['type']}');
+
+            // Convert response data to ChatMessage
+            final message = ChatMessage(
+              id: responseData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              content: responseData['content'] ?? '',
+              isUser: false,
+              timestamp: DateTime.parse(
+                responseData['timestamp'] ?? DateTime.now().toIso8601String(),
+              ),
+              source: _parseSource(responseData['source']),
+              wasPrivacyFiltered: responseData['wasPrivacyFiltered'] ?? false,
+              agentName: responseData['agentName'] as String?,
+              model: responseData['model'] as String?,
+              isPartial: responseData['metadata']?['isPartial'] ?? false,
+              chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
+              conversationId: responseData['metadata']?['conversationId'] as String?,
+            );
+
+            // Emit the message to listeners
+            _messageController.add(message);
+
+            if (message.isPartial) {
+              debugPrint('📦 Streaming chunk ${message.chunkIndex} received for ${message.id}');
+              debugPrint('   ConversationId: ${message.conversationId}');
+            } else {
+              debugPrint('✅ Final message received for ${message.id}');
+              debugPrint('   ConversationId: ${message.conversationId}');
+            }
+          } catch (e, stackTrace) {
+            debugPrint('❌ Failed to handle streamed response: $e');
+            debugPrint('StackTrace: $stackTrace');
+
+            // Send error message
+            _messageController.add(
+              ChatMessage(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                content: 'Failed to parse agent response: $e',
+                isUser: false,
+                timestamp: DateTime.now(),
+                isError: true,
+              ),
+            );
+          }
+        },
+        onError: (error) {
+          debugPrint('❌ Response stream error: $error');
+          _messageController.add(
+            ChatMessage(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              content: 'Stream connection error: $error',
+              isUser: false,
+              timestamp: DateTime.now(),
+              isError: true,
+            ),
+          );
+        },
+        onDone: () {
+          debugPrint('🔌 Response stream connection closed');
+        },
+      );
+
+      // Note: We don't close the channel here - it stays open for the session
+      // The channel will be closed when the app resets or disposes
+
+      debugPrint('✅ Response stream listener active');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to connect to response stream: $e');
+      debugPrint('StackTrace: $stackTrace');
+      rethrow;
+    }
+  }
+
   /// Save a short-lived mapping from queryId -> conversationId to atPlatform
   /// This helps recover routing after app restarts or provider re-creation
-  Future<void> saveQueryMapping(String queryId, String conversationId,
-      {int ttlMilliseconds = 3600000}) async {
+  Future<void> saveQueryMapping(String queryId, String conversationId, {int ttlMilliseconds = 3600000}) async {
     if (_atClient == null) {
       debugPrint('⚠️ AtClient not initialized, cannot save query mapping');
       return;
@@ -225,9 +325,7 @@ class AtClientService {
 
     debugPrint('🔔 Starting notification listener for messages from agent');
 
-    _atClient!.notificationService
-        .subscribe(regex: 'message.*', shouldDecrypt: true)
-        .listen(
+    _atClient!.notificationService.subscribe(regex: 'message.*', shouldDecrypt: true).listen(
       (notification) {
         debugPrint('📨 Received notification from ${notification.from}');
         _handleNotification(notification);
@@ -252,8 +350,7 @@ class AtClientService {
       final responseData = json.decode(notification.value!);
 
       final message = ChatMessage(
-        id: responseData['id'] ??
-            DateTime.now().millisecondsSinceEpoch.toString(),
+        id: responseData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
         content: responseData['content'] ?? '',
         isUser: false,
         timestamp: DateTime.parse(
@@ -265,15 +362,14 @@ class AtClientService {
         model: responseData['model'] as String?,
         isPartial: responseData['metadata']?['isPartial'] ?? false,
         chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
-        conversationId: responseData['metadata']?['conversationId']
-            as String?, // Extract from metadata where agent puts it
+        conversationId:
+            responseData['metadata']?['conversationId'] as String?, // Extract from metadata where agent puts it
       );
 
       // Emit the message to listeners
       _messageController.add(message);
       if (message.isPartial) {
-        debugPrint(
-            '📦 Streaming chunk ${message.chunkIndex} received for ${message.id}');
+        debugPrint('📦 Streaming chunk ${message.chunkIndex} received for ${message.id}');
         debugPrint('   ConversationId: ${message.conversationId}');
       } else {
         debugPrint('✅ Final message received for ${message.id}');

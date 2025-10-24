@@ -8,8 +8,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
   bool _isLoading = true;
   String? _atSign;
-  final app_service.AtClientService _atClientService =
-      app_service.AtClientService();
+  final app_service.AtClientService _atClientService = app_service.AtClientService();
 
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
@@ -25,8 +24,7 @@ class AuthProvider extends ChangeNotifier {
 
       final prefs = await SharedPreferences.getInstance();
       final savedAtSign = prefs.getString('atSign');
-      final hasCompletedOnboarding =
-          prefs.getBool('hasCompletedOnboarding') ?? false;
+      final hasCompletedOnboarding = prefs.getBool('hasCompletedOnboarding') ?? false;
 
       // Only try to auto-authenticate if we have both:
       // 1. A saved @sign in preferences
@@ -79,6 +77,16 @@ class AuthProvider extends ChangeNotifier {
 
       // Initialize atClient (will handle SDK switching if needed)
       await _atClientService.initialize(atSign);
+
+      // Start the response stream connection for efficient LLM streaming
+      try {
+        debugPrint('🔌 Starting response stream connection...');
+        await _atClientService.startResponseStreamConnection();
+        debugPrint('✅ Response stream connection established');
+      } catch (e) {
+        debugPrint('⚠️ Failed to start response stream (will fall back to notifications): $e');
+        // Non-fatal - agent will fall back to notifications if stream unavailable
+      }
 
       // Save to preferences
       final prefs = await SharedPreferences.getInstance();
