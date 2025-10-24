@@ -58,13 +58,30 @@ class _HomeScreenState extends State<HomeScreen> {
         final atClientService = app_service.AtClientService();
         await atClientService.initialize(authProvider.atSign!);
 
-        // Set agent atSign from AuthProvider (loaded during authentication)
+        // Load saved agent atSign from atPlatform (after AtClient is ready)
+        await authProvider.loadSavedAgentAtSign();
+
+        // Set agent atSign from AuthProvider (loaded from atPlatform)
         // or use default if not set
+        debugPrint('🔍 Checking AuthProvider.agentAtSign: ${authProvider.agentAtSign}');
         final agentAtSignToUse = authProvider.agentAtSign ?? '@llama';
+        debugPrint('🔍 Will use agent atSign: $agentAtSignToUse');
+
+        // Set in both providers
         if (agentProvider.agentAtSign == null || agentProvider.agentAtSign != agentAtSignToUse) {
           debugPrint('🤖 Setting agent atSign to: $agentAtSignToUse');
           agentProvider.setAgentAtSign(agentAtSignToUse);
+        } else {
+          debugPrint('✅ Agent atSign already set correctly: ${agentProvider.agentAtSign}');
         }
+
+        // Set in AtClientService (required for stream)
+        atClientService.setAgentAtSign(agentAtSignToUse);
+
+        // Establish stream connection (required for stream-only mode)
+        debugPrint('🔌 Connecting to response stream...');
+        await atClientService.startResponseStreamConnection();
+        debugPrint('✅ Response stream connected');
 
         debugPrint('✅ AtClient initialized successfully');
 
@@ -104,8 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Check if we need to switch @signs (like NoPorts does)
     try {
-      final currentAtSign =
-          AtClientManager.getInstance().atClient.getCurrentAtSign();
+      final currentAtSign = AtClientManager.getInstance().atClient.getCurrentAtSign();
       if (currentAtSign != null && currentAtSign != atSign) {
         debugPrint('🔄 Switching from $currentAtSign to $atSign');
         // Tell SDK to switch primary @sign
@@ -137,8 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
       throw Exception('Authentication failed: ${result.message}');
     }
 
-    debugPrint(
-        '✅ Authenticated successfully with keychain as ${result.atsign}');
+    debugPrint('✅ Authenticated successfully with keychain as ${result.atsign}');
   }
 
   void _scrollToBottom() {
@@ -169,8 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _showDeleteCurrentConversationDialog(
-      BuildContext context, AgentProvider agent) {
+  void _showDeleteCurrentConversationDialog(BuildContext context, AgentProvider agent) {
     final conversation = agent.currentConversation;
     if (conversation == null) return;
 
@@ -249,8 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (context) => const ConversationsScreen()),
+                MaterialPageRoute(builder: (context) => const ConversationsScreen()),
               );
             },
           ),
@@ -311,22 +324,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 16),
                         Text(
                           'Start a conversation',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.5),
-                                  ),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withOpacity(0.5),
+                              ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Ask me anything. I\'ll keep your data private.',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.3),
-                                  ),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withOpacity(0.3),
+                              ),
                         ),
                       ],
                     ),
@@ -376,8 +387,7 @@ class _PersistentInputField extends StatefulWidget {
   State<_PersistentInputField> createState() => _PersistentInputFieldState();
 }
 
-class _PersistentInputFieldState extends State<_PersistentInputField>
-    with AutomaticKeepAliveClientMixin {
+class _PersistentInputFieldState extends State<_PersistentInputField> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 

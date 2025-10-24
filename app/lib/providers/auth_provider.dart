@@ -47,6 +47,10 @@ class AuthProvider extends ChangeNotifier {
           // This prevents race conditions with SDK initialization
           _atSign = savedAtSign;
           _isAuthenticated = true;
+
+          // Load saved agent atSign (will be used when home screen initializes)
+          // Note: We can't call AtClient methods here since it's not initialized yet
+          // So we'll load it in home_screen after AtClient is initialized
         } else {
           debugPrint('⚠️ Keys not found in keychain for $savedAtSign');
           debugPrint('   Clearing saved state - will show onboarding');
@@ -114,19 +118,38 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Load agent atSign from atPlatform storage
+  /// Load agent atSign from atPlatform storage (public method for home_screen)
+  Future<void> loadSavedAgentAtSign() async {
+    final savedAgentAtSign = await _loadAgentAtSign();
+    if (savedAgentAtSign != null && savedAgentAtSign.isNotEmpty) {
+      _agentAtSign = savedAgentAtSign;
+      debugPrint('✅ Loaded and set agent atSign: $savedAgentAtSign');
+      notifyListeners();
+    } else {
+      debugPrint('ℹ️ No saved agent atSign found, keeping default');
+    }
+  }
+
+  /// Load agent atSign from atPlatform storage (private helper)
   Future<String?> _loadAgentAtSign() async {
     try {
+      debugPrint('📖 Loading agent atSign from atPlatform...');
       final atClient = AtClientManager.getInstance().atClient;
       final atKey = AtKey()
         ..key = 'agent_atsign'
         ..namespace = 'personalagent'
-        ..sharedWith = null; // Self key
+        ..sharedWith = null // Self key
+        ..metadata = (Metadata()
+          ..ttr = -1
+          ..ccd = false);
 
+      debugPrint('   Looking for key: ${atKey.toString()}');
       final result = await atClient.get(atKey);
+      debugPrint('   Found value: ${result.value}');
       return result.value;
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('⚠️ Failed to load agent atSign: $e');
+      debugPrint('   Stack: $stackTrace');
       return null;
     }
   }
@@ -137,14 +160,26 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('💾 Saving agent atSign: $agentAtSign');
 
       final atClient = AtClientManager.getInstance().atClient;
+      final currentAtSign = atClient.getCurrentAtSign();
+      debugPrint('   Current user atSign: $currentAtSign');
+
       final atKey = AtKey()
         ..key = 'agent_atsign'
         ..namespace = 'personalagent'
-        ..sharedWith = null; // Self key
+        ..sharedWith = null // Self key
+        ..metadata = (Metadata()
+          ..ttr = -1
+          ..ccd = false);
+
+      debugPrint('   Saving to key: ${atKey.toString()}');
 
       // Save to atPlatform (will auto-sync to remote)
       final result = await atClient.put(atKey, agentAtSign);
-      debugPrint('✅ Saved agent atSign to atPlatform: $result');
+      debugPrint('✅ Put operation result: $result');
+
+      // Verify it was saved
+      final verifyResult = await atClient.get(atKey);
+      debugPrint('✅ Verified saved value: ${verifyResult.value}');
 
       // Update local state
       _agentAtSign = agentAtSign;
