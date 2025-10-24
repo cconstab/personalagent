@@ -24,15 +24,30 @@ cmdkey /delete:"LegacyGeneric:target=atSign:%ATSIGN%" 2>nul
 
 echo → Clearing Flutter app data...
 
-REM Clear Flutter app local storage
+REM Clear Flutter app local storage (multiple possible locations)
 set "APP_DATA=%LOCALAPPDATA%\com.example.personalAgentApp"
 if exist "%APP_DATA%" (
+    echo    Removing %APP_DATA%
     rmdir /s /q "%APP_DATA%" 2>nul
+)
+
+REM Alternative app data location
+set "APP_DATA2=%LOCALAPPDATA%\personal_agent_app"
+if exist "%APP_DATA2%" (
+    echo    Removing %APP_DATA2%
+    rmdir /s /q "%APP_DATA2%" 2>nul
 )
 
 set "ROAMING_DATA=%APPDATA%\com.example.personalAgentApp"
 if exist "%ROAMING_DATA%" (
+    echo    Removing %ROAMING_DATA%
     rmdir /s /q "%ROAMING_DATA%" 2>nul
+)
+
+set "ROAMING_DATA2=%APPDATA%\personal_agent_app"
+if exist "%ROAMING_DATA2%" (
+    echo    Removing %ROAMING_DATA2%
+    rmdir /s /q "%ROAMING_DATA2%" 2>nul
 )
 
 echo.
