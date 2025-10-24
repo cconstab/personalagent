@@ -78,15 +78,10 @@ class AuthProvider extends ChangeNotifier {
       // Initialize atClient (will handle SDK switching if needed)
       await _atClientService.initialize(atSign);
 
-      // Start the response stream connection for efficient LLM streaming
-      try {
-        debugPrint('🔌 Starting response stream connection...');
-        await _atClientService.startResponseStreamConnection();
-        debugPrint('✅ Response stream connection established');
-      } catch (e) {
-        debugPrint('⚠️ Failed to start response stream (will fall back to notifications): $e');
-        // Non-fatal - agent will fall back to notifications if stream unavailable
-      }
+      // Start the response stream connection (REQUIRED for stream-only mode)
+      debugPrint('🔌 Starting response stream connection...');
+      await _atClientService.startResponseStreamConnection();
+      debugPrint('✅ Response stream connection established');
 
       // Save to preferences
       final prefs = await SharedPreferences.getInstance();
