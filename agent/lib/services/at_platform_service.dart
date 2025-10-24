@@ -296,25 +296,35 @@ class AtPlatformService {
     }
   }
 
-  /// Send response via stream channel (requires active stream connection)
+  /// Send response via stream channel with automatic fallback to notifications
   Future<void> sendStreamResponse(String recipientAtSign, ResponseMessage response) async {
     _ensureInitialized();
 
-    // Get the active stream channel for this recipient
+    // Try to send via stream channel first
     final channel = _activeChannels[recipientAtSign];
 
-    if (channel == null) {
-      throw Exception('No active stream channel for $recipientAtSign. Ensure app has connected.');
+    if (channel != null) {
+      try {
+        // Send via stream channel
+        final jsonData = json.encode(response.toJson());
+        channel.sink.add(jsonData);
+
+        _logger.fine('📤 Sent response via stream to $recipientAtSign');
+        return; // Success!
+      } catch (e, stackTrace) {
+        _logger.warning('Failed to send via stream to $recipientAtSign, falling back to notification', e, stackTrace);
+        // Fall through to notification fallback
+      }
+    } else {
+      _logger.fine('⚠️ No active stream channel for $recipientAtSign, using notification fallback');
     }
 
+    // Fallback: Send via notification
     try {
-      // Send via stream channel
-      final jsonData = json.encode(response.toJson());
-      channel.sink.add(jsonData);
-
-      _logger.fine('📤 Sent response via stream to $recipientAtSign');
+      await sendResponse(recipientAtSign, response);
+      _logger.fine('📤 Sent response via notification to $recipientAtSign');
     } catch (e, stackTrace) {
-      _logger.severe('Failed to send response via stream to $recipientAtSign', e, stackTrace);
+      _logger.severe('Failed to send response to $recipientAtSign (both stream and notification failed)', e, stackTrace);
       rethrow;
     }
   }
