@@ -9,6 +9,7 @@ This document provides a comprehensive overview of the Private AI Agent architec
 - [Data Flow](#data-flow)
 - [Privacy Architecture](#privacy-architecture)
 - [Communication Patterns](#communication-patterns)
+- [at_stream for LLM Response Streaming](docs/AT_STREAM_MIGRATION.md) ⭐ New!
 - [Ollama-Only Mode](#ollama-only-mode)
 - [State Management](#state-management)
 - [Security Model](#security-model)
