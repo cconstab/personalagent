@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:at_client_mobile/at_client_mobile.dart';
 import '../services/at_client_service.dart' as app_service;
 import '../utils/keychain_setup.dart';
 
@@ -8,11 +9,13 @@ class AuthProvider extends ChangeNotifier {
   bool _isAuthenticated = false;
   bool _isLoading = true;
   String? _atSign;
+  String? _agentAtSign;
   final app_service.AtClientService _atClientService = app_service.AtClientService();
 
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoading => _isLoading;
   String? get atSign => _atSign;
+  String? get agentAtSign => _agentAtSign;
 
   AuthProvider() {
     _checkAuthStatus();
@@ -78,6 +81,21 @@ class AuthProvider extends ChangeNotifier {
       // Initialize atClient (will handle SDK switching if needed)
       await _atClientService.initialize(atSign);
 
+      // Load saved agent atSign or use default
+      final savedAgentAtSign = await _loadAgentAtSign();
+      final agentAtSign = (savedAgentAtSign?.isEmpty ?? true)
+          ? '@mwcpi' // Default
+          : savedAgentAtSign!;
+
+      if (savedAgentAtSign == null || savedAgentAtSign.isEmpty) {
+        debugPrint('🤖 No saved agent atSign, using default: $agentAtSign');
+      } else {
+        debugPrint('🤖 Loaded saved agent atSign: $agentAtSign');
+      }
+
+      _agentAtSign = agentAtSign;
+      _atClientService.setAgentAtSign(agentAtSign);
+
       // Start the response stream connection (REQUIRED for stream-only mode)
       debugPrint('🔌 Starting response stream connection...');
       await _atClientService.startResponseStreamConnection();
@@ -92,6 +110,55 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Authentication failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Load agent atSign from atPlatform storage
+  Future<String?> _loadAgentAtSign() async {
+    try {
+      final atClient = AtClientManager.getInstance().atClient;
+      final atKey = AtKey()
+        ..key = 'agent_atsign'
+        ..namespace = 'personalagent'
+        ..sharedWith = null; // Self key
+
+      final result = await atClient.get(atKey);
+      return result.value;
+    } catch (e) {
+      debugPrint('⚠️ Failed to load agent atSign: $e');
+      return null;
+    }
+  }
+
+  /// Save agent atSign to atPlatform storage
+  Future<void> saveAgentAtSign(String agentAtSign) async {
+    try {
+      debugPrint('💾 Saving agent atSign: $agentAtSign');
+
+      final atClient = AtClientManager.getInstance().atClient;
+      final atKey = AtKey()
+        ..key = 'agent_atsign'
+        ..namespace = 'personalagent'
+        ..sharedWith = null; // Self key
+
+      // Save to atPlatform (will auto-sync to remote)
+      final result = await atClient.put(atKey, agentAtSign);
+      debugPrint('✅ Saved agent atSign to atPlatform: $result');
+
+      // Update local state
+      _agentAtSign = agentAtSign;
+      _atClientService.setAgentAtSign(agentAtSign);
+
+      // Reconnect the stream with new agent atSign
+      debugPrint('🔄 Reconnecting stream with new agent atSign...');
+      await _atClientService.startResponseStreamConnection();
+      debugPrint('✅ Stream reconnected successfully');
+
+      notifyListeners();
+    } catch (e, stackTrace) {
+      debugPrint('❌ Failed to save agent atSign: $e');
+      debugPrint('Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -117,6 +184,7 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setBool('hasCompletedOnboarding', false);
 
       _atSign = null;
+      _agentAtSign = null;
       _isAuthenticated = false;
 
       debugPrint('✅ Signed out successfully');

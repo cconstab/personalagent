@@ -58,9 +58,12 @@ class _HomeScreenState extends State<HomeScreen> {
         final atClientService = app_service.AtClientService();
         await atClientService.initialize(authProvider.atSign!);
 
-        // Set agent @sign if not already set
-        if (agentProvider.agentAtSign == null) {
-          agentProvider.setAgentAtSign('@llama');
+        // Set agent atSign from AuthProvider (loaded during authentication)
+        // or use default if not set
+        final agentAtSignToUse = authProvider.agentAtSign ?? '@llama';
+        if (agentProvider.agentAtSign == null || agentProvider.agentAtSign != agentAtSignToUse) {
+          debugPrint('🤖 Setting agent atSign to: $agentAtSignToUse');
+          agentProvider.setAgentAtSign(agentAtSignToUse);
         }
 
         debugPrint('✅ AtClient initialized successfully');

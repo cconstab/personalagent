@@ -17,6 +17,7 @@ class AtClientService {
   AtClient? _atClient;
   String? _currentAtSign;
   String? _agentAtSign;
+  AtNotificationStreamChannel<String, String>? _responseStreamChannel;
 
   final _messageController = StreamController<ChatMessage>.broadcast();
   Stream<ChatMessage> get messageStream => _messageController.stream;
@@ -63,10 +64,10 @@ class AtClientService {
     }
   }
 
-  /// Set the agent's @sign
+  /// Set the agent's atSign
   void setAgentAtSign(String agentAtSign) {
     _agentAtSign = agentAtSign;
-    debugPrint('Agent @sign set to: $agentAtSign');
+    debugPrint('Agent atSign set to: $agentAtSign');
   }
 
   /// Send a query message to the agent with conversation context
@@ -81,7 +82,7 @@ class AtClientService {
     }
 
     if (_agentAtSign == null || _agentAtSign!.isEmpty) {
-      throw Exception('Agent @sign not set. Call setAgentAtSign() first.');
+      throw Exception('Agent atSign not set. Call setAgentAtSign() first.');
     }
 
     try {
@@ -158,14 +159,25 @@ class AtClientService {
     }
 
     if (_agentAtSign == null || _agentAtSign!.isEmpty) {
-      throw Exception('Agent @sign not set. Call setAgentAtSign() first.');
+      throw Exception('Agent atSign not set. Call setAgentAtSign() first.');
     }
 
     try {
+      // Close existing stream if present
+      if (_responseStreamChannel != null) {
+        debugPrint('🔌 Closing existing stream connection...');
+        try {
+          _responseStreamChannel!.sink.close();
+        } catch (e) {
+          debugPrint('⚠️ Error closing old stream: $e');
+        }
+        _responseStreamChannel = null;
+      }
+
       debugPrint('🔌 Connecting to response stream from $_agentAtSign');
 
       // Connect to agent's stream channel
-      final channel = await AtNotificationStreamChannel.connect<String, String>(
+      _responseStreamChannel = await AtNotificationStreamChannel.connect<String, String>(
         _atClient!,
         otherAtsign: _agentAtSign!,
         baseNamespace: 'personalagent',
@@ -177,7 +189,7 @@ class AtClientService {
       debugPrint('✅ Connected to response stream channel');
 
       // Listen for incoming messages from agent
-      channel.stream.listen(
+      _responseStreamChannel!.stream.listen(
         (String responseJson) {
           try {
             debugPrint('📨 Received streamed response chunk');

@@ -32,7 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final keychainAtSigns = await KeychainUtil.getAtsignList() ?? [];
 
       if (keychainAtSigns.isNotEmpty) {
-        debugPrint('📦 Found existing @signs in keychain: $keychainAtSigns');
+        debugPrint('📦 Found existing atSigns in keychain: $keychainAtSigns');
         // User has keys - offer to sign in with existing keys
         setState(() {
           _isClearing = false;
@@ -78,7 +78,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     OnboardingPage(
       title: 'Get Started',
       description:
-          'Create your @sign to begin using your private AI assistant.',
+          'Create your atSign to begin using your private AI assistant.',
       icon: Icons.rocket_launch_outlined,
       color: Colors.orange,
     ),
@@ -122,14 +122,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       context: context,
       barrierDismissible: false, // Must select an option
       builder: (context) => AlertDialog(
-        title: const Text('Select @sign'),
+        title: const Text('Select atSign'),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Choose an @sign to sign in with:'),
+              const Text('Choose an atSign to sign in with:'),
               const SizedBox(height: 16),
               ListView.builder(
                 shrinkWrap: true,
@@ -172,14 +172,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               const Divider(),
               const SizedBox(height: 8),
               const Text(
-                'Or add a different @sign:',
+                'Or add a different atSign:',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: atSignController,
                 decoration: InputDecoration(
-                  hintText: 'Enter @sign (e.g., @alice)',
+                  hintText: 'Enter atSign (e.g., @alice)',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.alternate_email),
                 ),
@@ -210,7 +210,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               if (newAtSign.isEmpty || newAtSign == '@') {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Please enter an @sign'),
+                    content: const Text('Please enter an atSign'),
                     backgroundColor: Colors.orange,
                     behavior: SnackBarBehavior.floating,
                     margin: EdgeInsets.only(
@@ -226,19 +226,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _handleAddNewAtSign(newAtSign);
             },
             icon: const Icon(Icons.add),
-            label: const Text('Add @sign'),
+            label: const Text('Add atSign'),
           ),
         ],
       ),
     );
   }
 
-  /// Confirm removal of @sign from keychain
+  /// Confirm removal of atSign from keychain
   Future<void> _confirmRemoveAtSign(String atSign) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove @sign?'),
+        title: const Text('Remove atSign?'),
         content: Text(
           'Remove $atSign from the keychain?\n\nYou can always add it back later by importing the .atKeys file.',
         ),
@@ -263,7 +263,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  /// Remove @sign from keychain (uses SDK method like NoPorts)
+  /// Remove atSign from keychain (uses SDK method like NoPorts)
   Future<void> _removeAtSignFromKeychain(String atSign) async {
     try {
       debugPrint('🗑️ Removing $atSign from keychain');
@@ -290,11 +290,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _checkForExistingKeys();
       }
     } catch (e) {
-      debugPrint('Error removing @sign: $e');
+      debugPrint('Error removing atSign: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to remove @sign: $e'),
+            content: Text('Failed to remove atSign: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
@@ -308,12 +308,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  /// Handle "Add New @sign" - onboard a new @sign without clearing existing ones
+  /// Handle "Add New atSign" - onboard a new atSign without clearing existing ones
   Future<void> _handleAddNewAtSign(String newAtSign) async {
     try {
       debugPrint('➕ User wants to add: $newAtSign');
 
-      // IMPORTANT: Clear SDK's biometric storage for this specific @sign
+      // IMPORTANT: Clear SDK's biometric storage for this specific atSign
       // This prevents the SDK from finding old/partial keys and trying PKAM auth
       if (Platform.isMacOS || Platform.isIOS) {
         debugPrint('Clearing SDK biometric storage for $newAtSign...');
@@ -332,7 +332,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         }
       }
 
-      // Clear the app's current state but preserve other @signs' keys in keychain
+      // Clear the app's current state but preserve other atSigns' keys in keychain
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('atSign');
       await prefs.setBool('hasCompletedOnboarding', false);
@@ -360,7 +360,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       debugPrint('✅ Cleared app state. Ready to onboard $newAtSign');
       debugPrint('Note: SDK will create fresh state for $newAtSign');
 
-      // Show onboarding for the specific @sign
+      // Show onboarding for the specific atSign
       // Now SDK won't find any existing keys and will show proper import/activate UI
       await _handleOnboarding(atsign: newAtSign);
     } catch (e) {
@@ -395,29 +395,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ..commitLogPath = dir.path
         ..isLocalStoreRequired = true;
 
-      // Check if we need to switch @signs (if one is already active)
+      // Check if we need to switch atSigns (if one is already active)
       try {
         final currentAtSign =
             AtClientManager.getInstance().atClient.getCurrentAtSign();
         if (currentAtSign != null && currentAtSign != atSign) {
           debugPrint('🔄 Switching from $currentAtSign to $atSign');
-          // Tell SDK to switch primary @sign
+          // Tell SDK to switch primary atSign
           bool switched =
               await AtOnboarding.changePrimaryAtsign(atsign: atSign);
           if (!switched) {
             throw Exception('Failed to switch from $currentAtSign to $atSign');
           }
-          debugPrint('✅ Primary @sign switched');
+          debugPrint('✅ Primary atSign switched');
         }
       } catch (e) {
         // AtClientManager not initialized yet - that's fine, first login
         debugPrint('No existing AtClient to switch from: $e');
       }
 
-      // CRITICAL: Pass atsign parameter to force authentication with this specific @sign
+      // CRITICAL: Pass atsign parameter to force authentication with this specific atSign
       final result = await AtOnboarding.onboard(
         context: context,
-        atsign: atSign, // Force authentication with selected @sign
+        atsign: atSign, // Force authentication with selected atSign
         config: AtOnboardingConfig(
           atClientPreference: atClientPreference,
           rootEnvironment: RootEnvironment.Production,
@@ -551,12 +551,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ..commitLogPath = dir.path
         ..isLocalStoreRequired = true;
 
-      // Check if the specified @sign already exists in keychain
+      // Check if the specified atSign already exists in keychain
       final keychainAtSigns = await KeychainUtil.getAtsignList() ?? [];
       final atSignExists = atsign != null && keychainAtSigns.contains(atsign);
 
       if (atSignExists) {
-        // User tried to add an @sign that's already in the keychain
+        // User tried to add an atSign that's already in the keychain
         debugPrint('⚠️ $atsign already exists in keychain: $keychainAtSigns');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -585,14 +585,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       // Track whether user chose import or activate
       bool isImporting = false;
 
-      // If a specific @sign was provided, show choice dialog
+      // If a specific atSign was provided, show choice dialog
       if (atsign != null && atsign.isNotEmpty) {
         debugPrint('Checking server status for $atsign...');
-        // Show a choice dialog: Import keys or Activate new @sign
+        // Show a choice dialog: Import keys or Activate new atSign
         final choice = await showDialog<String>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('How would you like to add this @sign?'),
+            title: const Text('How would you like to add this atSign?'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -606,8 +606,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 ListTile(
                   leading: const Icon(Icons.add_circle),
-                  title: const Text('Activate new @sign'),
-                  subtitle: const Text('Activate a new @sign you own'),
+                  title: const Text('Activate new atSign'),
+                  subtitle: const Text('Activate a new atSign you own'),
                   onTap: () => Navigator.pop(context, 'activate'),
                 ),
               ],
@@ -640,13 +640,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
       // Call SDK onboarding with the appropriate configuration
       // CRITICAL: For import flow, DON'T pass atsign parameter!
-      // - If importing: Let SDK detect @sign from the imported .atKeys file
-      // - If activating: Pass the atsign to start activation for that specific @sign
+      // - If importing: Let SDK detect atSign from the imported .atKeys file
+      // - If activating: Pass the atsign to start activation for that specific atSign
       final result = await AtOnboarding.onboard(
         context: context,
         // Only pass atsign for activation, not for import
         atsign: isImporting ? null : atsign,
-        isSwitchingAtsign: atsign != null, // This is adding a new @sign
+        isSwitchingAtsign: atsign != null, // This is adding a new atSign
         config: AtOnboardingConfig(
           atClientPreference: atClientPreference,
           rootEnvironment: RootEnvironment.Production,

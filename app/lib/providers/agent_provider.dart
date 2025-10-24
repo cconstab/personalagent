@@ -14,8 +14,7 @@ class AgentProvider extends ChangeNotifier {
   String? _agentAtSign;
   bool _useOllamaOnly = false;
   final AtClientService _atClientService = AtClientService();
-  final ConversationStorageService _storageService =
-      ConversationStorageService();
+  final ConversationStorageService _storageService = ConversationStorageService();
 
   /// Map of query message ID -> conversation ID to route responses correctly
   final Map<String, String> _queryToConversationMap = {};
@@ -31,8 +30,7 @@ class AgentProvider extends ChangeNotifier {
   }
 
   List<Conversation> get conversations => List.unmodifiable(_conversations);
-  Conversation? get currentConversation =>
-      _conversations.where((c) => c.id == _currentConversationId).firstOrNull;
+  Conversation? get currentConversation => _conversations.where((c) => c.id == _currentConversationId).firstOrNull;
   List<ChatMessage> get messages => currentConversation?.messages ?? [];
   bool get isProcessing => _isProcessing;
   String? get agentAtSign => _agentAtSign;
@@ -55,15 +53,13 @@ class AgentProvider extends ChangeNotifier {
 
     // Check if we have any conversations loaded
     if (_conversations.isEmpty && !_conversationsLoaded) {
-      debugPrint(
-          '⏳ Conversations not loaded yet - queueing message ${message.id}');
+      debugPrint('⏳ Conversations not loaded yet - queueing message ${message.id}');
       _pendingMessages.add(message);
       return;
     }
 
     if (_conversations.isEmpty) {
-      debugPrint(
-          '⚠️ WARNING: No conversations exist! Creating default conversation...');
+      debugPrint('⚠️ WARNING: No conversations exist! Creating default conversation...');
       await _createNewConversation();
     }
 
@@ -81,15 +77,12 @@ class AgentProvider extends ChangeNotifier {
     conversationId ??= _queryToConversationMap[message.id];
 
     if (conversationId == null) {
-      debugPrint(
-          '❌ No conversationId found in map either for message ${message.id}');
-      debugPrint(
-          '   Current map keys: ${_queryToConversationMap.keys.toList()}');
+      debugPrint('❌ No conversationId found in map either for message ${message.id}');
+      debugPrint('   Current map keys: ${_queryToConversationMap.keys.toList()}');
       debugPrint('🔍 Checking atPlatform for persisted mapping...');
       conversationId = await _atClientService.getQueryMapping(message.id);
       if (conversationId != null) {
-        debugPrint(
-            '✅ Found persisted mapping: ${message.id} -> $conversationId');
+        debugPrint('✅ Found persisted mapping: ${message.id} -> $conversationId');
       }
     } else {
       debugPrint('📍 Found conversationId: $conversationId');
@@ -100,13 +93,10 @@ class AgentProvider extends ChangeNotifier {
       Conversation? conversation;
       try {
         conversation = _conversations.firstWhere((c) => c.id == conversationId);
-        debugPrint(
-            '✅ Found conversation: ${conversation.id} (${conversation.title})');
+        debugPrint('✅ Found conversation: ${conversation.id} (${conversation.title})');
       } catch (e) {
-        debugPrint(
-            '❌ Conversation $conversationId not found in loaded conversations!');
-        debugPrint(
-            '   Available conversations: ${_conversations.map((c) => c.id).toList()}');
+        debugPrint('❌ Conversation $conversationId not found in loaded conversations!');
+        debugPrint('   Available conversations: ${_conversations.map((c) => c.id).toList()}');
         debugPrint('   This response will be dropped to prevent misrouting');
         return; // Don't add to wrong conversation
       }
@@ -114,51 +104,40 @@ class AgentProvider extends ChangeNotifier {
       // Check if this is a streaming update (partial message)
       if (message.isPartial) {
         // Find existing AGENT message (not user message) with this ID and update it
-        final existingIndex = conversation.messages
-            .indexWhere((m) => m.id == message.id && !m.isUser);
+        final existingIndex = conversation.messages.indexWhere((m) => m.id == message.id && !m.isUser);
 
-        debugPrint(
-            '📥 Received partial message ${message.id} (chunk ${message.chunkIndex})');
+        debugPrint('📥 Received partial message ${message.id} (chunk ${message.chunkIndex})');
         debugPrint('   Content length: ${message.content.length}');
         debugPrint(
             '   Content preview: ${message.content.length > 50 ? message.content.substring(0, 50) : message.content}');
         debugPrint('   Looking for existing message with ID: ${message.id}');
         debugPrint('   Found at index: $existingIndex');
-        debugPrint(
-            '   Message IDs in conversation: ${conversation.messages.map((m) => m.id).toList()}');
+        debugPrint('   Message IDs in conversation: ${conversation.messages.map((m) => m.id).toList()}');
 
         if (existingIndex != -1) {
           // Update existing message with new content
           final oldContent = conversation.messages[existingIndex].content;
           conversation.messages[existingIndex] = message;
-          debugPrint(
-              '🔄 Updated streaming message ${message.id} (chunk ${message.chunkIndex})');
-          debugPrint(
-              '   Old content length: ${oldContent.length}, New: ${message.content.length}');
+          debugPrint('🔄 Updated streaming message ${message.id} (chunk ${message.chunkIndex})');
+          debugPrint('   Old content length: ${oldContent.length}, New: ${message.content.length}');
         } else {
           // First chunk - replace thinking placeholder and add actual message
           final thinkingPlaceholderId = '${message.id}_thinking';
-          final thinkingIndex = conversation.messages
-              .indexWhere((m) => m.id == thinkingPlaceholderId);
+          final thinkingIndex = conversation.messages.indexWhere((m) => m.id == thinkingPlaceholderId);
 
-          debugPrint(
-              '🔍 Looking for thinking placeholder: $thinkingPlaceholderId');
+          debugPrint('🔍 Looking for thinking placeholder: $thinkingPlaceholderId');
           debugPrint('   Found at index: $thinkingIndex');
-          debugPrint(
-              '   Message IDs in conversation: ${conversation.messages.map((m) => m.id).toList()}');
+          debugPrint('   Message IDs in conversation: ${conversation.messages.map((m) => m.id).toList()}');
 
           if (thinkingIndex != -1) {
             // Replace thinking placeholder with first chunk
             conversation.messages[thinkingIndex] = message;
-            debugPrint(
-                '🔄 Replaced thinking placeholder with first chunk for ${message.id}');
-            debugPrint(
-                '   New message ID at index $thinkingIndex: ${conversation.messages[thinkingIndex].id}');
+            debugPrint('🔄 Replaced thinking placeholder with first chunk for ${message.id}');
+            debugPrint('   New message ID at index $thinkingIndex: ${conversation.messages[thinkingIndex].id}');
           } else {
             // No placeholder found, just add
             conversation.messages.add(message);
-            debugPrint(
-                '➕ Added first streaming chunk for ${message.id} (no placeholder found)');
+            debugPrint('➕ Added first streaming chunk for ${message.id} (no placeholder found)');
           }
         }
 
@@ -168,50 +147,40 @@ class AgentProvider extends ChangeNotifier {
       } else {
         // This is the final complete message
         debugPrint('📬 Received FINAL message ${message.id}');
-        debugPrint(
-            '   Message IDs before processing: ${conversation.messages.map((m) => m.id).toList()}');
+        debugPrint('   Message IDs before processing: ${conversation.messages.map((m) => m.id).toList()}');
 
         // Search for existing AGENT message (not user message) with this ID
-        final existingIndex = conversation.messages
-            .indexWhere((m) => m.id == message.id && !m.isUser);
+        final existingIndex = conversation.messages.indexWhere((m) => m.id == message.id && !m.isUser);
 
-        debugPrint(
-            '   Looking for existing AGENT message with ID ${message.id}: index = $existingIndex');
+        debugPrint('   Looking for existing AGENT message with ID ${message.id}: index = $existingIndex');
 
         if (existingIndex != -1) {
           // Replace streaming message with final version
           conversation.messages[existingIndex] = message;
-          debugPrint(
-              '✅ Finalized streaming message ${message.id} at index $existingIndex');
+          debugPrint('✅ Finalized streaming message ${message.id} at index $existingIndex');
         } else {
           // Check if there's a thinking placeholder to replace
           final thinkingPlaceholderId = '${message.id}_thinking';
-          final thinkingIndex = conversation.messages
-              .indexWhere((m) => m.id == thinkingPlaceholderId);
+          final thinkingIndex = conversation.messages.indexWhere((m) => m.id == thinkingPlaceholderId);
 
-          debugPrint(
-              '   Looking for thinking placeholder $thinkingPlaceholderId: index = $thinkingIndex');
+          debugPrint('   Looking for thinking placeholder $thinkingPlaceholderId: index = $thinkingIndex');
 
           if (thinkingIndex != -1) {
             // Replace thinking placeholder with final message
             conversation.messages[thinkingIndex] = message;
-            debugPrint(
-                '✅ Replaced thinking placeholder with final message ${message.id} at index $thinkingIndex');
+            debugPrint('✅ Replaced thinking placeholder with final message ${message.id} at index $thinkingIndex');
           } else {
             // No streaming or placeholder, just add the complete message
             conversation.messages.add(message);
-            debugPrint(
-                '✅ Added complete message ${message.id} (no placeholder or existing message found!)');
+            debugPrint('✅ Added complete message ${message.id} (no placeholder or existing message found!)');
           }
         }
 
-        debugPrint(
-            '   Message IDs after processing: ${conversation.messages.map((m) => m.id).toList()}');
+        debugPrint('   Message IDs after processing: ${conversation.messages.map((m) => m.id).toList()}');
 
         conversation.updatedAt = DateTime.now(); // Refreshes TTL
         conversation.autoUpdateTitle();
-        await _saveConversation(
-            conversation); // Save to atPlatform with refreshed TTL
+        await _saveConversation(conversation); // Save to atPlatform with refreshed TTL
 
         // Clean up the mapping only after final message
         _queryToConversationMap.remove(message.id);
@@ -219,15 +188,12 @@ class AgentProvider extends ChangeNotifier {
         _isProcessing = false;
       }
 
-      debugPrint(
-          '📝 Updated conversation: ${conversation.id} (${conversation.title})');
+      debugPrint('📝 Updated conversation: ${conversation.id} (${conversation.title})');
     } else {
       // No mapping found - this is a routing error!
       // DO NOT add to current conversation as it may have changed
-      debugPrint(
-          '⚠️ WARNING: No conversation mapping found for message ${message.id}');
-      debugPrint(
-          '   This message will be dropped to prevent cross-contamination');
+      debugPrint('⚠️ WARNING: No conversation mapping found for message ${message.id}');
+      debugPrint('   This message will be dropped to prevent cross-contamination');
       debugPrint(
           '   Message content preview: ${message.content.length > 50 ? message.content.substring(0, 50) : message.content}...');
 
@@ -237,8 +203,7 @@ class AgentProvider extends ChangeNotifier {
       Conversation? targetConversation;
       try {
         targetConversation = _conversations.firstWhere(
-          (c) => c.messages
-              .any((m) => m.id == message.id || m.id == thinkingPlaceholderId),
+          (c) => c.messages.any((m) => m.id == message.id || m.id == thinkingPlaceholderId),
         );
       } catch (e) {
         // No conversation has this message or placeholder
@@ -246,20 +211,17 @@ class AgentProvider extends ChangeNotifier {
       }
 
       if (targetConversation != null) {
-        debugPrint(
-            '   ✅ Found message in conversation: ${targetConversation.id}');
+        debugPrint('   ✅ Found message in conversation: ${targetConversation.id}');
         if (message.isPartial) {
           // Handle streaming in found conversation
           // Search for existing AGENT message (not user message)
-          final existingIndex = targetConversation.messages
-              .indexWhere((m) => m.id == message.id && !m.isUser);
+          final existingIndex = targetConversation.messages.indexWhere((m) => m.id == message.id && !m.isUser);
           if (existingIndex != -1) {
             targetConversation.messages[existingIndex] = message;
             debugPrint('🔄 Updated streaming message in fallback path');
           } else {
             // Check for thinking placeholder
-            final thinkingIndex = targetConversation.messages
-                .indexWhere((m) => m.id == thinkingPlaceholderId);
+            final thinkingIndex = targetConversation.messages.indexWhere((m) => m.id == thinkingPlaceholderId);
             if (thinkingIndex != -1) {
               targetConversation.messages[thinkingIndex] = message;
               debugPrint('🔄 Replaced thinking placeholder in fallback path');
@@ -272,23 +234,19 @@ class AgentProvider extends ChangeNotifier {
         } else {
           // Final message
           // Search for existing AGENT message (not user message)
-          final existingIndex = targetConversation.messages
-              .indexWhere((m) => m.id == message.id && !m.isUser);
+          final existingIndex = targetConversation.messages.indexWhere((m) => m.id == message.id && !m.isUser);
           if (existingIndex != -1) {
             targetConversation.messages[existingIndex] = message;
             debugPrint('✅ Updated final message in fallback path');
           } else {
             // Check for thinking placeholder
-            final thinkingIndex = targetConversation.messages
-                .indexWhere((m) => m.id == thinkingPlaceholderId);
+            final thinkingIndex = targetConversation.messages.indexWhere((m) => m.id == thinkingPlaceholderId);
             if (thinkingIndex != -1) {
               targetConversation.messages[thinkingIndex] = message;
-              debugPrint(
-                  '✅ Replaced thinking placeholder with final message in fallback path');
+              debugPrint('✅ Replaced thinking placeholder with final message in fallback path');
             } else {
               targetConversation.messages.add(message);
-              debugPrint(
-                  '➕ Added new final message in fallback path (should not happen!)');
+              debugPrint('➕ Added new final message in fallback path (should not happen!)');
             }
           }
           targetConversation.updatedAt = DateTime.now();
@@ -349,8 +307,7 @@ class AgentProvider extends ChangeNotifier {
       // If AtClient still not ready (during initial app startup), create default conversation
       // and we'll load from atPlatform later when AtClient is ready
       if (!_storageService.isInitialized) {
-        debugPrint(
-            '⏳ AtClient not ready yet, will load conversations after initialization');
+        debugPrint('⏳ AtClient not ready yet, will load conversations after initialization');
         await _createNewConversation();
         return;
       }
@@ -371,27 +328,23 @@ class AgentProvider extends ChangeNotifier {
         debugPrint('📌 Restored current conversation: $currentId');
       } else if (_conversations.isNotEmpty) {
         _currentConversationId = _conversations.first.id;
-        debugPrint(
-            '📌 Set current conversation to first: ${_currentConversationId}');
+        debugPrint('📌 Set current conversation to first: ${_currentConversationId}');
       } else {
         // Create first conversation
         await _createNewConversation();
         debugPrint('📌 Created new conversation: $_currentConversationId');
       }
 
-      debugPrint(
-          '📚 Loaded ${_conversations.length} conversations from atPlatform');
+      debugPrint('📚 Loaded ${_conversations.length} conversations from atPlatform');
       debugPrint('📌 Current conversation ID: $_currentConversationId');
-      debugPrint(
-          '📌 Current conversation: ${currentConversation?.id} (${currentConversation?.messages.length} msgs)');
+      debugPrint('📌 Current conversation: ${currentConversation?.id} (${currentConversation?.messages.length} msgs)');
 
       // Mark conversations as loaded
       _conversationsLoaded = true;
 
       // Process any pending messages that arrived before conversations were loaded
       if (_pendingMessages.isNotEmpty) {
-        debugPrint(
-            '📬 Processing ${_pendingMessages.length} pending messages...');
+        debugPrint('📬 Processing ${_pendingMessages.length} pending messages...');
         final messagesToProcess = List<ChatMessage>.from(_pendingMessages);
         _pendingMessages.clear();
         for (final message in messagesToProcess) {
@@ -517,14 +470,11 @@ class AgentProvider extends ChangeNotifier {
   }
 
   /// Rename a conversation
-  Future<void> renameConversation(
-      String conversationId, String newTitle) async {
-    final conversation =
-        _conversations.firstWhere((c) => c.id == conversationId);
+  Future<void> renameConversation(String conversationId, String newTitle) async {
+    final conversation = _conversations.firstWhere((c) => c.id == conversationId);
     conversation.title = newTitle;
     conversation.updatedAt = DateTime.now(); // Refreshes TTL
-    await _saveConversation(
-        conversation); // Save to atPlatform with refreshed TTL
+    await _saveConversation(conversation); // Save to atPlatform with refreshed TTL
     _safeNotifyListeners();
     debugPrint('✏️ Renamed conversation $conversationId to: $newTitle');
   }
@@ -539,7 +489,7 @@ class AgentProvider extends ChangeNotifier {
 
     debugPrint('📤 Attempting to send message...');
     debugPrint('   AtClient initialized: ${_atClientService.isInitialized}');
-    debugPrint('   Agent @sign: $_agentAtSign');
+    debugPrint('   Agent atSign: $_agentAtSign');
     debugPrint('   Conversation: ${currentConversation!.id}');
 
     // Check if AtClient is initialized
@@ -557,13 +507,12 @@ class AgentProvider extends ChangeNotifier {
       return;
     }
 
-    // Check if agent @sign is configured
+    // Check if agent atSign is configured
     if (_agentAtSign == null) {
-      debugPrint('❌ Agent @sign not configured!');
+      debugPrint('❌ Agent atSign not configured!');
       final errorMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
-        content:
-            'Error: Agent @sign not configured. Please set it in Settings.',
+        content: 'Error: Agent atSign not configured. Please set it in Settings.',
         isUser: false,
         timestamp: DateTime.now(),
         isError: true,
@@ -586,8 +535,7 @@ class AgentProvider extends ChangeNotifier {
     // Track which conversation this query belongs to
     final conversationIdForThisQuery = currentConversation!.id;
     _queryToConversationMap[userMessage.id] = conversationIdForThisQuery;
-    debugPrint(
-        '📍 Mapped query ${userMessage.id} → conversation $conversationIdForThisQuery');
+    debugPrint('📍 Mapped query ${userMessage.id} → conversation $conversationIdForThisQuery');
 
     currentConversation!.messages.add(userMessage);
 
@@ -603,33 +551,27 @@ class AgentProvider extends ChangeNotifier {
       agentName: 'Agent',
     );
     currentConversation!.messages.add(thinkingMessage);
-    debugPrint(
-        '💭 Added thinking placeholder $thinkingPlaceholderId for query ${userMessage.id}');
+    debugPrint('💭 Added thinking placeholder $thinkingPlaceholderId for query ${userMessage.id}');
     currentConversation!.updatedAt = DateTime.now(); // Refreshes TTL
     currentConversation!.autoUpdateTitle();
     _isProcessing = true;
-    await _saveConversation(
-        currentConversation!); // Save to atPlatform with refreshed TTL
+    await _saveConversation(currentConversation!); // Save to atPlatform with refreshed TTL
     _safeNotifyListeners();
 
     try {
       // Get conversation history (all messages except the current user message and thinking placeholder)
       final messages = currentConversation!.messages;
       // Exclude last 2 messages: the user message we just added and the thinking placeholder
-      final conversationHistory = messages.length > 2
-          ? messages.sublist(0, messages.length - 2)
-          : <ChatMessage>[];
+      final conversationHistory = messages.length > 2 ? messages.sublist(0, messages.length - 2) : <ChatMessage>[];
 
-      debugPrint(
-          '📝 Including ${conversationHistory.length} previous messages for context');
+      debugPrint('📝 Including ${conversationHistory.length} previous messages for context');
 
       // Send message to agent via atPlatform with conversation context and ID
       await _atClientService.sendQuery(
         userMessage,
         useOllamaOnly: _useOllamaOnly,
         conversationHistory: conversationHistory,
-        conversationId:
-            conversationIdForThisQuery, // Include conversation ID for stateless routing
+        conversationId: conversationIdForThisQuery, // Include conversation ID for stateless routing
       );
 
       // Persist the mapping to atPlatform as well (short TTL, helpful after restarts/sign switches)
@@ -653,16 +595,14 @@ class AgentProvider extends ChangeNotifier {
       currentConversation!.messages.add(errorMessage);
     } finally {
       _isProcessing = false;
-      await _saveConversation(
-          currentConversation!); // Save response to atPlatform
+      await _saveConversation(currentConversation!); // Save response to atPlatform
       _safeNotifyListeners();
     }
   }
 
   Future<void> clearMessages() async {
     if (currentConversation != null) {
-      debugPrint(
-          '🧹 Clearing ${currentConversation!.messages.length} messages from current conversation');
+      debugPrint('🧹 Clearing ${currentConversation!.messages.length} messages from current conversation');
       currentConversation!.messages.clear();
       currentConversation!.title = 'New Conversation';
       currentConversation!.updatedAt = DateTime.now(); // Refreshes TTL
