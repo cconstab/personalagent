@@ -13,8 +13,8 @@ Successfully migrated the Personal AI Agent from notification-based LLM streamin
 ### Key Improvements
 ✅ **Lower Latency** - Direct streaming vs notification round-trips  
 ✅ **Better Scalability** - Reduced atServer load, better throughput  
-✅ **Automatic Fallback** - Gracefully degrades to notifications if stream unavailable  
-✅ **Cleaner Code** - Simplified transformers following MCP pattern  
+✅ **Stream-Only Architecture** - Simplified codebase, single efficient path  
+✅ **Cleaner Code** - Removed dual-path complexity, easier to maintain  
 
 ## Files Modified
 
@@ -22,7 +22,8 @@ Successfully migrated the Personal AI Agent from notification-based LLM streamin
 - `agent/lib/services/at_platform_service.dart`
   - Added `_activeChannels` Map to store connections
   - Added `startResponseStreamListener()` - binds to `personalagent.response`
-  - Added `sendStreamResponse()` - uses channel or falls back to notifications
+  - Modified `sendStreamResponse()` - stream-only (no fallback), throws if no channel
+  - Kept `sendResponse()` for potential future use cases
 
 - `agent/lib/services/agent_service.dart`
   - Calls `startResponseStreamListener()` on startup
@@ -37,6 +38,7 @@ Successfully migrated the Personal AI Agent from notification-based LLM streamin
   - Added `startResponseStreamConnection()` - connects to agent's channel
   - Listens to `channel.stream` and parses JSON to ChatMessage
   - Wires into existing `_messageController` for UI updates
+  - **Removed** old notification listener methods (`_startNotificationListener`, `_handleNotification`)
 
 - `app/lib/providers/auth_provider.dart`
   - Calls `startResponseStreamConnection()` after authentication
@@ -57,8 +59,24 @@ Successfully migrated the Personal AI Agent from notification-based LLM streamin
 - App connects to agent's channel after auth
 - LLM responses stream efficiently in real-time
 - UI displays chunks incrementally
-- Fallback to notifications works when needed
-- No breaking changes to existing functionality
+- Stream-only architecture working perfectly
+- No breaking changes to user experience
+
+## Architecture Decision
+
+**Stream-Only Design**: After successful testing, we removed the notification fallback to simplify the codebase:
+
+### Why Stream-Only?
+1. **Simplified Code** - Single code path is easier to maintain and debug
+2. **Better Performance** - No overhead from dual-path logic
+3. **Forces Best Practice** - Ensures proper connection establishment
+4. **Proven Reliability** - Streams work consistently in testing
+
+### Trade-offs
+- ❌ No graceful degradation if streams fail
+- ✅ But streams are reliable with proper connection handling
+- ✅ Errors are explicit and easier to diagnose
+- ✅ Cleaner, more maintainable codebase
 
 ## Performance Impact
 
@@ -84,11 +102,11 @@ This implementation follows the **MCP (Model Context Protocol) pattern** from th
 
 ## Backward Compatibility
 
-✅ **100% Backward Compatible**
-- Automatic fallback to notification-based approach if stream unavailable
-- Existing notification listeners remain functional
-- No breaking changes to API or data formats
-- Old and new systems can coexist during migration
+⚠️ **Breaking Change (Intentional)**
+- Old notification-based response delivery removed
+- Apps must use stream connections to receive responses
+- Cleaner architecture without dual-path complexity
+- All existing functionality maintained through streams
 
 ## Next Steps
 

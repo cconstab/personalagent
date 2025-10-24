@@ -52,10 +52,6 @@ class AtClientService {
         _currentAtSign = atSign;
         _atClient = manager.atClient;
         debugPrint('✅ AtClient initialized for $currentAtSign');
-
-        // Start listening for notifications
-        _startNotificationListener();
-        debugPrint('✅ Notification listener started');
       } else {
         // This shouldn't happen after successful onboarding
         throw Exception('AtClient not initialized. Onboarding may not have completed successfully.');
@@ -317,79 +313,6 @@ class AtClientService {
     }
 
     return null;
-  }
-
-  /// Start listening for notifications from the agent
-  void _startNotificationListener() {
-    if (_atClient == null) return;
-
-    debugPrint('🔔 Starting notification listener for messages from agent');
-
-    _atClient!.notificationService.subscribe(regex: 'message.*', shouldDecrypt: true).listen(
-      (notification) {
-        debugPrint('📨 Received notification from ${notification.from}');
-        _handleNotification(notification);
-      },
-      onError: (error) {
-        debugPrint('❌ Notification listener error: $error');
-      },
-    );
-  }
-
-  /// Handle incoming notification from agent
-  void _handleNotification(AtNotification notification) {
-    try {
-      debugPrint('Received notification: ${notification.key}');
-
-      if (notification.value == null) {
-        debugPrint('Notification value is null');
-        return;
-      }
-
-      // Parse the response
-      final responseData = json.decode(notification.value!);
-
-      final message = ChatMessage(
-        id: responseData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-        content: responseData['content'] ?? '',
-        isUser: false,
-        timestamp: DateTime.parse(
-          responseData['timestamp'] ?? DateTime.now().toIso8601String(),
-        ),
-        source: _parseSource(responseData['source']),
-        wasPrivacyFiltered: responseData['wasPrivacyFiltered'] ?? false,
-        agentName: responseData['agentName'] as String?,
-        model: responseData['model'] as String?,
-        isPartial: responseData['metadata']?['isPartial'] ?? false,
-        chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
-        conversationId:
-            responseData['metadata']?['conversationId'] as String?, // Extract from metadata where agent puts it
-      );
-
-      // Emit the message to listeners
-      _messageController.add(message);
-      if (message.isPartial) {
-        debugPrint('📦 Streaming chunk ${message.chunkIndex} received for ${message.id}');
-        debugPrint('   ConversationId: ${message.conversationId}');
-      } else {
-        debugPrint('✅ Final message received for ${message.id}');
-        debugPrint('   ConversationId: ${message.conversationId}');
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Failed to handle notification: $e');
-      debugPrint('StackTrace: $stackTrace');
-
-      // Send error message
-      _messageController.add(
-        ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          content: 'Failed to parse agent response: $e',
-          isUser: false,
-          timestamp: DateTime.now(),
-          isError: true,
-        ),
-      );
-    }
   }
 
   /// Parse response source from string

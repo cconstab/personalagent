@@ -156,23 +156,38 @@ class MessageReceiveTransformer
 | **Latency** | Higher (notification per chunk) | Lower (direct stream) |
 | **Scalability** | Limited by notification rate | Better throughput |
 | **Connection** | Stateless (per message) | Stateful (persistent channel) |
-| **Fallback** | N/A | Automatic fallback to notifications |
+| **Simplicity** | Simple but inefficient | Clean and efficient |
 | **Code Complexity** | Simple | Moderate (channel management) |
 
-## Automatic Fallback
+## Stream-Only Architecture
 
-The system gracefully degrades if stream connections fail:
+The system now uses **streams exclusively** for LLM response delivery:
 
-### Agent Fallback
-Uses `sendStreamResponse()` which checks for active channel:
-- If channel exists → Uses `channel.sink.add()`
-- If no channel → Falls back to `sendResponse()` (notification)
+## Stream-Only Architecture
 
-### App Fallback
-If `startResponseStreamConnection()` fails during init:
-- Logs warning and continues
-- Existing notification listener still receives responses
-- Non-fatal failure mode ensures app remains functional
+The system now uses **streams exclusively** for LLM response delivery:
+
+### Agent Behavior
+- **`sendStreamResponse()`** sends only via stream channel
+- Throws exception if no active channel exists
+- Ensures app must be connected to receive responses
+
+### App Behavior  
+- **`startResponseStreamConnection()`** must succeed for app to work
+- All LLM responses received exclusively via stream
+- No fallback notification listeners
+
+### Error Handling
+If stream connection fails:
+- Agent throws exception when trying to send
+- App initialization reports error
+- **Solution**: Ensure proper network connectivity and authentication
+
+This stream-only approach:
+✅ Simplifies codebase (removed dual path complexity)  
+✅ Forces proper connection establishment  
+✅ Makes debugging easier (single code path)  
+✅ Improves performance (no fallback overhead)
 
 ## Connection Lifecycle
 

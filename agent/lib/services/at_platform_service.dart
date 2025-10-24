@@ -296,29 +296,26 @@ class AtPlatformService {
     }
   }
 
-  /// Send response via stream channel if available, otherwise fall back to notification
+  /// Send response via stream channel (requires active stream connection)
   Future<void> sendStreamResponse(String recipientAtSign, ResponseMessage response) async {
     _ensureInitialized();
 
+    // Get the active stream channel for this recipient
+    final channel = _activeChannels[recipientAtSign];
+
+    if (channel == null) {
+      throw Exception('No active stream channel for $recipientAtSign. Ensure app has connected.');
+    }
+
     try {
-      // Check if we have an active stream channel for this recipient
-      final channel = _activeChannels[recipientAtSign];
+      // Send via stream channel
+      final jsonData = json.encode(response.toJson());
+      channel.sink.add(jsonData);
 
-      if (channel != null) {
-        // Send via stream channel - much more efficient!
-        final jsonData = json.encode(response.toJson());
-        channel.sink.add(jsonData);
-
-        _logger.fine('📤 Sent response via stream to $recipientAtSign');
-      } else {
-        // Fall back to notification-based approach
-        _logger.fine('⚠️ No active stream channel, falling back to notification');
-        await sendResponse(recipientAtSign, response);
-      }
-    } catch (e) {
-      _logger.warning('Failed to send via stream, falling back to notification: $e');
-      // Fall back to notification on any error
-      await sendResponse(recipientAtSign, response);
+      _logger.fine('📤 Sent response via stream to $recipientAtSign');
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to send response via stream to $recipientAtSign', e, stackTrace);
+      rethrow;
     }
   }
 
