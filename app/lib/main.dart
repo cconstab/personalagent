@@ -1,11 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:logging/logging.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'providers/agent_provider.dart';
 import 'providers/auth_provider.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Configure logging before any other code runs
+  hierarchicalLoggingEnabled = true;
+  
+  // Set root to WARNING level - this will suppress all INFO logs
+  Logger.root.level = Level.WARNING;
+  
+  // Clear any existing listeners that the SDK may have added
+  Logger.root.clearListeners();
+  
+  // Add our own listener for WARNING and above
+  Logger.root.onRecord.listen((record) {
+    debugPrint('${record.level.name}|${record.time}|${record.loggerName}|${record.message}');
+  });
+  
   runApp(const MyApp());
 }
 

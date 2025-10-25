@@ -125,6 +125,13 @@ echo.
 
 REM Start the agent
 echo 🚀 Starting agent service...
+if "%1"=="-v" (
+    echo    Verbose mode enabled
+) else if "%1"=="--verbose" (
+    echo    Verbose mode enabled
+) else (
+    echo    Use 'run_agent.bat -v' for verbose logging
+)
 echo    Press Ctrl+C to stop
 echo.
-dart run bin/agent.dart
+dart run bin/agent.dart %*

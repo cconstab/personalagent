@@ -21,6 +21,11 @@ class AtClientService {
 
   final _messageController = StreamController<ChatMessage>.broadcast();
   Stream<ChatMessage> get messageStream => _messageController.stream;
+  
+  // Auto-reconnect state
+  bool _shouldReconnect = true;
+  int _reconnectAttempts = 0;
+  Timer? _reconnectTimer;
 
   bool get isInitialized => _atClient != null;
   String? get currentAtSign => _currentAtSign;
@@ -29,8 +34,6 @@ class AtClientService {
   /// Initialize atClient for the current user
   Future<void> initialize(String atSign) async {
     try {
-      debugPrint('🔄 Initializing AtClientService for $atSign');
-
       // Get the AtClientManager instance (set by at_onboarding_flutter)
       _atClientManager = AtClientManager.getInstance();
 
@@ -44,15 +47,12 @@ class AtClientService {
 
       // Check if SDK is using wrong @sign
       if (currentAtSign != null && currentAtSign != atSign) {
-        debugPrint('⚠️ SDK is using $currentAtSign but we want $atSign');
-        debugPrint('   This indicates AtOnboarding.onboard() did not switch @signs properly');
         throw Exception('SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
       }
 
       if (currentAtSign != null) {
         _currentAtSign = atSign;
         _atClient = manager.atClient;
-        debugPrint('✅ AtClient initialized for $currentAtSign');
       } else {
         // This shouldn't happen after successful onboarding
         throw Exception('AtClient not initialized. Onboarding may not have completed successfully.');
@@ -67,7 +67,6 @@ class AtClientService {
   /// Set the agent's atSign
   void setAgentAtSign(String agentAtSign) {
     _agentAtSign = agentAtSign;
-    debugPrint('Agent atSign set to: $agentAtSign');
   }
 
   /// Send a query message to the agent with conversation context
@@ -86,13 +85,6 @@ class AtClientService {
     }
 
     try {
-      debugPrint('📤 Sending query to $_agentAtSign');
-      debugPrint('   From: $_currentAtSign');
-      debugPrint('   Ollama Only: $useOllamaOnly');
-      debugPrint('   With ${conversationHistory?.length ?? 0} previous messages');
-      debugPrint(
-          '   Message: ${message.content.substring(0, message.content.length > 50 ? 50 : message.content.length)}...');
-
       // Build conversation context from history
       final List<Map<String, dynamic>> context = [];
       if (conversationHistory != null && conversationHistory.isNotEmpty) {
@@ -131,20 +123,14 @@ class AtClientService {
         ..sharedBy = _currentAtSign
         ..metadata = metadata;
 
-      debugPrint('   Key: ${atKey.toString()}');
-
       final jsonData = json.encode(queryData);
 
       // Send encrypted notification - SDK handles encryption automatically
-      final notificationResult = await _atClient!.notificationService.notify(
+      await _atClient!.notificationService.notify(
         NotificationParams.forUpdate(atKey, value: jsonData),
         checkForFinalDeliveryStatus: false,
         waitForFinalDeliveryStatus: false,
       );
-
-      debugPrint('✅ Query sent successfully!');
-      debugPrint('   Notification ID: ${notificationResult.notificationID}');
-      debugPrint('   To: $_agentAtSign');
     } catch (e, stackTrace) {
       debugPrint('Failed to send query: $e');
       debugPrint('StackTrace: $stackTrace');
@@ -162,19 +148,24 @@ class AtClientService {
       throw Exception('Agent atSign not set. Call setAgentAtSign() first.');
     }
 
+    _shouldReconnect = true;
+    _reconnectAttempts = 0;
+    await _connectToStreamWithRetry();
+  }
+
+  Future<void> _connectToStreamWithRetry() async {
+    if (!_shouldReconnect) return;
+
     try {
       // Close existing stream if present
       if (_responseStreamChannel != null) {
-        debugPrint('🔌 Closing existing stream connection...');
         try {
           _responseStreamChannel!.sink.close();
         } catch (e) {
-          debugPrint('⚠️ Error closing old stream: $e');
+          // Ignore errors closing old stream
         }
         _responseStreamChannel = null;
       }
-
-      debugPrint('🔌 Connecting to response stream from $_agentAtSign');
 
       // Connect to agent's stream channel
       _responseStreamChannel = await AtNotificationStreamChannel.connect<String, String>(
@@ -186,17 +177,16 @@ class AtClientService {
         recvTransformer: MessageReceiveTransformer(),
       );
 
-      debugPrint('✅ Connected to response stream channel');
+      // Reset reconnect attempts on successful connection
+      _reconnectAttempts = 0;
+      debugPrint('✅ Stream connection established to $_agentAtSign');
 
       // Listen for incoming messages from agent
       _responseStreamChannel!.stream.listen(
         (String responseJson) {
           try {
-            debugPrint('📨 Received streamed response chunk');
-
             // Parse JSON response
             final responseData = json.decode(responseJson) as Map<String, dynamic>;
-            debugPrint('   Type: ${responseData['type']}');
 
             // Convert response data to ChatMessage
             final message = ChatMessage(
@@ -217,14 +207,6 @@ class AtClientService {
 
             // Emit the message to listeners
             _messageController.add(message);
-
-            if (message.isPartial) {
-              debugPrint('📦 Streaming chunk ${message.chunkIndex} received for ${message.id}');
-              debugPrint('   ConversationId: ${message.conversationId}');
-            } else {
-              debugPrint('✅ Final message received for ${message.id}');
-              debugPrint('   ConversationId: ${message.conversationId}');
-            }
           } catch (e, stackTrace) {
             debugPrint('❌ Failed to handle streamed response: $e');
             debugPrint('StackTrace: $stackTrace');
@@ -243,37 +225,63 @@ class AtClientService {
         },
         onError: (error) {
           debugPrint('❌ Response stream error: $error');
-          _messageController.add(
-            ChatMessage(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              content: 'Stream connection error: $error',
-              isUser: false,
-              timestamp: DateTime.now(),
-              isError: true,
-            ),
-          );
+          
+          // Attempt to reconnect on error
+          _scheduleReconnect();
         },
         onDone: () {
-          debugPrint('🔌 Response stream connection closed');
+          debugPrint('🔌 Stream connection closed');
+          
+          // Attempt to reconnect when stream closes
+          _scheduleReconnect();
         },
       );
 
       // Note: We don't close the channel here - it stays open for the session
       // The channel will be closed when the app resets or disposes
-
-      debugPrint('✅ Response stream listener active');
     } catch (e, stackTrace) {
-      debugPrint('❌ Failed to connect to response stream: $e');
+      debugPrint('❌ Failed to establish stream connection: $e');
       debugPrint('StackTrace: $stackTrace');
-      rethrow;
+      
+      // Schedule reconnect on connection failure
+      _scheduleReconnect();
     }
+  }
+
+  void _scheduleReconnect() {
+    if (!_shouldReconnect) return;
+
+    // Cancel existing timer if any
+    _reconnectTimer?.cancel();
+
+    _reconnectAttempts++;
+    
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+    final delay = Duration(
+      seconds: (_reconnectAttempts < 5) 
+        ? (1 << (_reconnectAttempts - 1)) // 2^(n-1)
+        : 30, // Cap at 30 seconds
+    );
+
+    debugPrint('🔄 Scheduling reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
+
+    _reconnectTimer = Timer(delay, () {
+      _connectToStreamWithRetry();
+    });
+  }
+
+  /// Stop auto-reconnect (call when user logs out or app closes)
+  void stopReconnect() {
+    _shouldReconnect = false;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
   }
 
   /// Save a short-lived mapping from queryId -> conversationId to atPlatform
   /// This helps recover routing after app restarts or provider re-creation
   Future<void> saveQueryMapping(String queryId, String conversationId, {int ttlMilliseconds = 3600000}) async {
     if (_atClient == null) {
-      debugPrint('⚠️ AtClient not initialized, cannot save query mapping');
+      // Can't save yet
       return;
     }
 
@@ -287,24 +295,19 @@ class AtClientService {
           ..ttr = -1
           ..ccd = false);
 
-      final putResult = await _atClient!.put(
+      await _atClient!.put(
         key,
         conversationId,
         putRequestOptions: PutRequestOptions()..useRemoteAtServer = true,
       );
-
-      debugPrint('💾 Saved query mapping $queryId -> $conversationId');
-      debugPrint('   Commit: ${putResult ? "success" : "failed"}');
-    } catch (e, st) {
-      debugPrint('❌ Failed to save query mapping: $e');
-      debugPrint('StackTrace: $st');
+    } catch (e) {
+      // Silently fail - not critical
     }
   }
 
   /// Retrieve a previously saved query->conversation mapping, or null
   Future<String?> getQueryMapping(String queryId) async {
     if (_atClient == null) {
-      debugPrint('⚠️ AtClient not initialized, cannot load query mapping');
       return null;
     }
 
@@ -316,12 +319,10 @@ class AtClientService {
 
       final result = await _atClient!.get(key);
       if (result.value != null) {
-        debugPrint('🔍 Found remote mapping for $queryId -> ${result.value}');
         return result.value as String;
       }
-    } catch (e, st) {
-      debugPrint('❌ Failed to load query mapping $queryId: $e');
-      debugPrint('StackTrace: $st');
+    } catch (e) {
+      // Silently fail - not critical
     }
 
     return null;
@@ -373,7 +374,6 @@ class AtClientService {
       };
 
       await _atClient!.put(atKey, json.encode(contextData));
-      debugPrint('Context stored: $key');
     } catch (e, stackTrace) {
       debugPrint('Failed to store context: $e');
       debugPrint('StackTrace: $stackTrace');
@@ -394,7 +394,6 @@ class AtClientService {
         ..sharedWith = _agentAtSign;
 
       await _atClient!.delete(atKey);
-      debugPrint('Context deleted: $key');
       return true;
     } catch (e, stackTrace) {
       debugPrint('Failed to delete context: $e');
@@ -405,17 +404,13 @@ class AtClientService {
 
   /// Reset the service (for switching @signs or signing out)
   Future<void> reset() async {
-    debugPrint('🔄 Resetting AtClientService');
-    debugPrint('   Closing connections for $_currentAtSign');
-
     // Stop notification listener if active
     try {
       if (_atClient != null) {
         _atClient!.notificationService.stopAllSubscriptions();
-        debugPrint('   Stopped notification subscriptions');
       }
     } catch (e) {
-      debugPrint('   Error stopping notifications: $e');
+      // Ignore errors
     }
 
     // Clear references
@@ -428,6 +423,7 @@ class AtClientService {
 
   /// Cleanup resources
   void dispose() {
+    stopReconnect();
     _messageController.close();
   }
 }

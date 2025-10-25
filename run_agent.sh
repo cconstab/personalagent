@@ -121,12 +121,17 @@ echo ""
 
 # Start the agent
 echo -e "${BLUE}🚀 Starting agent...${NC}"
+if [[ "$1" == "-v" || "$1" == "--verbose" ]]; then
+    echo -e "${BLUE}   Verbose mode enabled${NC}"
+else
+    echo -e "${BLUE}   Use './run_agent.sh -v' for verbose logging${NC}"
+fi
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
 
 # Run the agent with explicit .env path and any additional arguments
-# This allows passing -n "Agent Name" to the script
+# This allows passing -n "Agent Name" or -v for verbose
 dart run bin/agent.dart --env .env "$@"
 
 # If the agent exits, show a message

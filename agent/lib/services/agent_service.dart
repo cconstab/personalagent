@@ -26,7 +26,7 @@ class AgentService {
 
   /// Initialize all services
   Future<void> initialize() async {
-    _logger.info('Initializing agent services');
+    _logger.fine('Initializing agent services');
 
     // Initialize atPlatform
     await atPlatform.initialize();
@@ -41,41 +41,41 @@ class AgentService {
     if (claude != null) {
       final claudeAvailable = await claude!.verifyApiKey();
       if (claudeAvailable) {
-        _logger.info('Claude API is available');
+        _logger.fine('Claude API is available');
       } else {
         _logger.warning('Claude API key is invalid or service unavailable');
       }
     }
 
-    _logger.info('Agent services initialized successfully');
+    _logger.fine('Agent services initialized successfully');
   }
 
   /// Start listening for incoming queries
   Future<void> startListening() async {
-    _logger.info('Starting to listen for queries');
+    _logger.fine('Starting to listen for queries');
 
     // Start the at_stream response channel listener
-    _logger.info('Starting at_stream response channel listener');
+    _logger.fine('Starting at_stream response channel listener');
     atPlatform.startResponseStreamListener();
 
     // Start listening for query notifications
     await atPlatform.subscribeToMessages(_handleIncomingQuery);
-    _logger.info('Now listening for queries');
+    _logger.fine('Now listening for queries');
   }
 
   /// Handle incoming query from user
   Future<void> _handleIncomingQuery(QueryMessage query) async {
     try {
-      _logger.info('⚡ Handling query from ${query.userId}');
+      _logger.info('⚡ Query from ${query.userId}');
 
       // Try to acquire mutex for this query - ensures only one agent responds
       final mutexAcquired = await _tryAcquireQueryMutex(query);
       if (!mutexAcquired) {
-        _logger.info('🤷‍♂️ Will not handle query ${query.id} - another agent instance will handle this');
+        _logger.fine('🤷‍♂️ Will not handle query ${query.id} - another agent instance will handle this');
         return; // Another agent instance acquired the mutex, so we skip this query
       }
 
-      _logger.info('😎 Acquired mutex for query ${query.id} - this agent will respond');
+      _logger.fine('😎 Acquired mutex for query ${query.id} - this agent will respond');
 
       // Process the query
       final response = await processQuery(query);
@@ -127,10 +127,10 @@ class AgentService {
       );
 
       if (mutexAcquired) {
-        _logger.info('😎 Acquired mutex for notification $mutexId (query ${query.id})');
+        _logger.fine('😎 Acquired mutex for notification $mutexId (query ${query.id})');
         return true;
       } else {
-        _logger.info('🤷‍♂️ Did not acquire mutex for notification $mutexId (another agent instance will handle this)');
+        _logger.fine('🤷‍♂️ Did not acquire mutex for notification $mutexId (another agent instance will handle this)');
         return false;
       }
     } catch (e) {
@@ -142,11 +142,11 @@ class AgentService {
   /// Process a user query with privacy-preserving logic
   Future<ResponseMessage> processQuery(QueryMessage query) async {
     try {
-      _logger.info('Processing query: ${query.id}');
+      _logger.fine('Processing query: ${query.id}');
 
       // Check if user requested Ollama-only mode
       if (query.useOllamaOnly) {
-        _logger.info('🔒 User requested Ollama-only mode - 100% private processing');
+        _logger.fine('🔒 User requested Ollama-only mode - 100% private processing');
         final context = await _retrieveContext(query);
         return await _processWithOllama(query, context);
       }
@@ -157,7 +157,7 @@ class AgentService {
       // Step 2: Analyze if we can answer locally with Ollama
       final analysis = await ollama.analyzeQuery(query: query.content, userContext: context);
 
-      _logger.info(
+      _logger.fine(
         'Analysis: canAnswerLocally=${analysis.canAnswerLocally}, '
         'confidence=${analysis.confidence.toStringAsFixed(2)}',
       );
@@ -201,23 +201,23 @@ class AgentService {
 
   /// Process query using only Ollama (fully private)
   Future<ResponseMessage> _processWithOllama(QueryMessage query, String context) async {
-    _logger.info('Processing with Ollama only (fully private)');
+    _logger.fine('Processing with Ollama only (fully private)');
 
     // Agents are now stateless - conversation history comes from the app
     final hasHistory = query.conversationHistory != null && query.conversationHistory!.isNotEmpty;
 
     if (hasHistory) {
-      _logger.info('📝 Using conversation history from app (${query.conversationHistory!.length} messages)');
-      _logger.info('🔍 History contents:');
+      _logger.fine('📝 Using conversation history from app (${query.conversationHistory!.length} messages)');
+      _logger.fine('🔍 History contents:');
       for (var i = 0; i < query.conversationHistory!.length; i++) {
         final msg = query.conversationHistory![i];
         final role = msg['role'] ?? 'unknown';
         final content = msg['content'] ?? '';
         final preview = content.length > 50 ? '${content.substring(0, 50)}...' : content;
-        _logger.info('   [$i] $role: $preview');
+        _logger.fine('   [$i] $role: $preview');
       }
     } else {
-      _logger.info('🆕 Starting new conversation for ${query.userId}');
+      _logger.fine('🆕 Starting new conversation for ${query.userId}');
     }
 
     // Build system message with user's personal context (only on first message)

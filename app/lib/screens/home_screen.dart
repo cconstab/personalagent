@@ -47,11 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final agentProvider = context.read<AgentProvider>();
 
       if (authProvider.atSign != null) {
-        debugPrint('🔄 Initializing AtClient for ${authProvider.atSign}');
-
-        // Note: Don't clear messages here - causes setState during build
-        // Messages will be loaded from atPlatform anyway
-
         // Use the SDK's onboarding to authenticate with keychain keys
         await _authenticateWithKeychain(authProvider.atSign!);
 
@@ -63,30 +58,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Set agent atSign from AuthProvider (loaded from atPlatform)
         // or use default if not set
-        debugPrint('🔍 Checking AuthProvider.agentAtSign: ${authProvider.agentAtSign}');
         final agentAtSignToUse = authProvider.agentAtSign ?? '@llama';
-        debugPrint('🔍 Will use agent atSign: $agentAtSignToUse');
 
         // Set in both providers
         if (agentProvider.agentAtSign == null || agentProvider.agentAtSign != agentAtSignToUse) {
-          debugPrint('🤖 Setting agent atSign to: $agentAtSignToUse');
           agentProvider.setAgentAtSign(agentAtSignToUse);
-        } else {
-          debugPrint('✅ Agent atSign already set correctly: ${agentProvider.agentAtSign}');
         }
 
         // Set in AtClientService (required for stream)
         atClientService.setAgentAtSign(agentAtSignToUse);
 
         // Establish stream connection (required for stream-only mode)
-        debugPrint('🔌 Connecting to response stream...');
         await atClientService.startResponseStreamConnection();
-        debugPrint('✅ Response stream connected');
-
-        debugPrint('✅ AtClient initialized successfully');
 
         // Now that AtClient is ready, reload conversations from atPlatform
-        debugPrint('🔄 Reloading conversations now that AtClient is ready...');
         await agentProvider.reloadConversations();
       }
     } catch (e) {

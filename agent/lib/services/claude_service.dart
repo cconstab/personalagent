@@ -25,7 +25,7 @@ class ClaudeService {
     int maxTokens = 1024,
   }) async {
     try {
-      _logger.info('Querying Claude with sanitized input');
+      _logger.fine('Querying Claude with sanitized input');
       _logger.fine('Sanitized query: $sanitizedQuery');
 
       final response = await _httpClient.post(
@@ -77,7 +77,7 @@ class ClaudeService {
     int maxTokens = 1024,
   }) async* {
     try {
-      _logger.info('Querying Claude with streaming');
+      _logger.fine('Querying Claude with streaming');
 
       final request = http.Request('POST', Uri.parse(_apiUrl));
       request.headers['Content-Type'] = 'application/json';

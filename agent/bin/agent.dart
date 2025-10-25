@@ -8,10 +8,15 @@ import 'package:personal_agent/services/ollama_service.dart';
 import 'package:personal_agent/services/claude_service.dart';
 
 void main(List<String> arguments) async {
-  // Setup logging
-  Logger.root.level = Level.ALL;
+  // Setup logging (level will be set after parsing args)
   Logger.root.onRecord.listen((record) {
-    print('${record.level.name}: ${record.time}: ${record.message}');
+    // Simple format for non-verbose mode
+    if (record.level == Level.INFO) {
+      print(record.message);
+    } else {
+      // Detailed format for verbose mode
+      print('${record.level.name}: ${record.time}: ${record.message}');
+    }
     if (record.error != null) print('Error: ${record.error}');
     if (record.stackTrace != null) print('Stack: ${record.stackTrace}');
   });
@@ -22,6 +27,8 @@ void main(List<String> arguments) async {
   final parser = ArgParser()
     ..addFlag('help',
         abbr: 'h', help: 'Show this help message', negatable: false)
+    ..addFlag('verbose',
+        abbr: 'v', help: 'Enable verbose logging', negatable: false)
     ..addOption('env', abbr: 'e', help: 'Path to .env file', defaultsTo: '.env')
     ..addOption('name',
         abbr: 'n',
@@ -29,6 +36,10 @@ void main(List<String> arguments) async {
         defaultsTo: null);
 
   final results = parser.parse(arguments);
+
+  // Configure logging level based on verbose flag
+  final verbose = results['verbose'] as bool;
+  Logger.root.level = verbose ? Level.ALL : Level.INFO;
 
   if (results['help']) {
     print('Private AI Agent with atPlatform');
@@ -81,13 +92,15 @@ void main(List<String> arguments) async {
 
   try {
     // Initialize services
-    logger.info('Starting Private AI Agent');
-    logger.info('atSign: $atSign');
+    logger.info('🚀 Starting Private AI Agent');
+    logger.info('   atSign: $atSign');
     if (agentName.isNotEmpty) {
-      logger.info('Agent Name: $agentName');
+      logger.info('   Name: $agentName');
     }
-    logger.info('Ollama: $ollamaHost ($ollamaModel)');
-    logger.info('Claude: ${claudeApiKey.isNotEmpty ? "enabled" : "disabled"}');
+    if (verbose) {
+      logger.info('   Ollama: $ollamaHost ($ollamaModel)');
+      logger.info('   Claude: ${claudeApiKey.isNotEmpty ? "enabled" : "disabled"}');
+    }
 
     final atPlatform = AtPlatformService(
       atSign: atSign,
@@ -118,20 +131,22 @@ void main(List<String> arguments) async {
 
     // Initialize agent
     await agent.initialize();
-    logger.info('Agent initialized successfully');
+    logger.fine('Agent initialized successfully');
 
     // Start listening for messages
     await agent.startListening();
-    logger.info('✅ Agent is now listening for queries...');
-    logger.info('Press Ctrl+C to stop');
+    logger.info('✅ Ready - listening for queries');
+    if (verbose) {
+      logger.info('Press Ctrl+C to stop');
+    }
 
     // Keep the process running
     await ProcessSignal.sigint.watch().first;
-    logger.info('Shutting down...');
+    logger.info('🛑 Shutting down...');
 
     // Cleanup
     await agent.dispose();
-    logger.info('Agent stopped');
+    logger.fine('Agent stopped');
   } catch (e, stackTrace) {
     logger.severe('Fatal error', e, stackTrace);
     exit(1);

@@ -32,12 +32,12 @@ class AtPlatformService {
   /// Initialize the atPlatform connection
   Future<void> initialize() async {
     if (_isInitialized) {
-      _logger.info('AtPlatform already initialized');
+      _logger.fine('AtPlatform already initialized');
       return;
     }
 
     try {
-      _logger.info('Initializing atPlatform for $atSign');
+      _logger.info('🔧 Initializing atPlatform for $atSign');
 
       // Load the atKeys file
       final keysFile = File(keysFilePath);
@@ -53,9 +53,9 @@ class AtPlatformService {
       final hiveStoragePath = './storage/hive$storageSuffix';
       final commitLogPath = './storage/commit$storageSuffix';
 
-      _logger.info('Storage paths:');
-      _logger.info('  Hive: $hiveStoragePath');
-      _logger.info('  Commit: $commitLogPath');
+      _logger.fine('Storage paths:');
+      _logger.fine('  Hive: $hiveStoragePath');
+      _logger.fine('  Commit: $commitLogPath');
 
       // Setup onboarding preferences (similar to at_notifications demo)
       final preference = AtOnboardingPreference()
@@ -67,7 +67,7 @@ class AtPlatformService {
         ..atKeysFilePath = keysFilePath;
 
       // Use AtOnboardingService for proper PKAM authentication
-      _logger.info('Authenticating with PKAM...');
+      _logger.fine('Authenticating with PKAM...');
       final onboardingService = AtOnboardingServiceImpl(atSign, preference);
 
       final authenticated = await onboardingService.authenticate();
@@ -75,7 +75,7 @@ class AtPlatformService {
         throw Exception('Failed to authenticate $atSign with PKAM');
       }
 
-      _logger.info('✅ PKAM authentication successful');
+      _logger.fine('✅ PKAM authentication successful');
 
       // Get the authenticated atClient
       _atClient = onboardingService.atClient;
@@ -83,11 +83,11 @@ class AtPlatformService {
       // CRITICAL: Set fetchOfflineNotifications to false to ignore old notifications
       // This prevents processing stale queries that accumulated while agent was offline
       _atClient!.getPreferences()!.fetchOfflineNotifications = false;
-      _logger.info('📅 Configured to fetch ONLY new notifications (ignore offline backlog)');
+      _logger.fine('📅 Configured to fetch ONLY new notifications (ignore offline backlog)');
 
       _isInitialized = true;
 
-      _logger.info('✅ AtPlatform initialized successfully');
+      _logger.info('✅ AtPlatform ready');
     } catch (e, stackTrace) {
       _logger.severe('Failed to initialize atPlatform', e, stackTrace);
       rethrow;
@@ -173,36 +173,36 @@ class AtPlatformService {
   Future<void> subscribeToMessages(Future<void> Function(QueryMessage) onQueryReceived) async {
     _ensureInitialized();
 
-    _logger.info('🔔 Setting up notification listener');
-    _logger.info('   AtClient: ${_atClient != null ? "initialized" : "NULL"}');
-    _logger.info('   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}');
+    _logger.fine('🔔 Setting up notification listener');
+    _logger.fine('   AtClient: ${_atClient != null ? "initialized" : "NULL"}');
+    _logger.fine('   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}');
 
     try {
       // Subscribe with same pattern as at_talk - this makes auto-decryption work!
-      _logger.info('📡 Subscribing with regex: query.personalagent@');
-      _logger.info('   (Following at_talk_gui pattern for auto-decryption)');
+      _logger.fine('📡 Subscribing with regex: query.personalagent@');
+      _logger.fine('   (Following at_talk_gui pattern for auto-decryption)');
 
       final stream = _atClient!.notificationService.subscribe(regex: 'query.personalagent@', shouldDecrypt: true);
 
-      _logger.info('✅ Subscribe call completed, got stream');
+      _logger.fine('✅ Subscribe call completed, got stream');
 
       stream.listen(
         (notification) async {
           try {
-            _logger.info('🎉 NOTIFICATION RECEIVED!');
-            _logger.info('   From: ${notification.from}');
-            _logger.info('   Key: ${notification.key}');
-            _logger.info('   ID: ${notification.id}');
+            _logger.fine('🎉 NOTIFICATION RECEIVED!');
+            _logger.fine('   From: ${notification.from}');
+            _logger.fine('   Key: ${notification.key}');
+            _logger.fine('   ID: ${notification.id}');
 
             // Skip stats notifications (ID: -1)
             if (notification.id == '-1') {
-              _logger.info('   ⏭️  Skipping stats notification');
+              _logger.fine('   ⏭️  Skipping stats notification');
               return;
             }
 
             // Filter for query notifications only
             if (!notification.key.contains('query')) {
-              _logger.info('   ⏭️  Skipping non-query notification');
+              _logger.fine('   ⏭️  Skipping non-query notification');
               return;
             }
 
@@ -212,13 +212,13 @@ class AtPlatformService {
               return;
             }
 
-            _logger.info(
+            _logger.fine(
               '   Value preview: ${notification.value!.substring(0, notification.value!.length > 100 ? 100 : notification.value!.length)}...',
             );
 
             // Parse the JSON data - should be decrypted automatically
             final jsonData = json.decode(notification.value!);
-            _logger.info('✅ JSON decoded successfully (auto-decrypted!)');
+            _logger.fine('✅ JSON decoded successfully (auto-decrypted!)');
 
             // Parse as QueryMessage
             final useOllamaOnly = jsonData['useOllamaOnly'] ?? false;
@@ -251,21 +251,21 @@ class AtPlatformService {
         },
         onError: (error, stackTrace) {
           _logger.warning('⚠️ Notification stream error: $error');
-          _logger.warning('Stack trace: $stackTrace');
+          _logger.fine('Stack trace: $stackTrace');
           // The SDK will automatically retry the connection
         },
         onDone: () {
           _logger.info('🔌 Notification stream closed');
-          _logger.info('   The SDK will automatically reconnect');
+          _logger.fine('   The SDK will automatically reconnect');
         },
         cancelOnError: false, // Keep listening even if there are errors
       );
 
-      _logger.info('✅✅✅ Notification listener is ACTIVE and waiting');
-      _logger.info('   Pattern: query.*');
-      _logger.info('   Namespace: personalagent');
-      _logger.info('   Decryption: enabled');
-      _logger.info('   Ready to receive from any @sign');
+      _logger.info('✅ Listening for queries');
+      _logger.fine('   Pattern: query.*');
+      _logger.fine('   Namespace: personalagent');
+      _logger.fine('   Decryption: enabled');
+      _logger.fine('   Ready to receive from any @sign');
     } catch (e, stackTrace) {
       _logger.severe('Failed to start notification listener', e, stackTrace);
       rethrow;
@@ -289,7 +289,7 @@ class AtPlatformService {
         NotificationParams.forUpdate(atKey, value: jsonData),
       );
 
-      _logger.info('Sent response to $recipientAtSign: ${notificationResult.notificationID}');
+      _logger.fine('Sent response to $recipientAtSign: ${notificationResult.notificationID}');
     } catch (e, stackTrace) {
       _logger.severe('Failed to send response', e, stackTrace);
       rethrow;
@@ -324,9 +324,9 @@ class AtPlatformService {
   void startResponseStreamListener() {
     _ensureInitialized();
 
-    _logger.info('🎧 Starting at_stream response channel listener');
-    _logger.info('   Base namespace: personalagent');
-    _logger.info('   Domain namespace: response');
+    _logger.info('🎧 Listening for stream connections');
+    _logger.fine('   Base namespace: personalagent');
+    _logger.fine('   Domain namespace: response');
 
     try {
       // Bind listener for incoming stream connection requests
@@ -339,8 +339,8 @@ class AtPlatformService {
       ).listen(
         (channel) async {
           final fromAtSign = channel.otherAtsign;
-          _logger.info('✅ Stream channel established with $fromAtSign');
-          _logger.info('   Session ID: ${channel.sessionId}');
+          _logger.info('🔗 Connected: $fromAtSign');
+          _logger.fine('   Session ID: ${channel.sessionId}');
 
           // Store the channel for this user
           _activeChannels[fromAtSign] = channel;
@@ -349,7 +349,7 @@ class AtPlatformService {
           channel.stream.listen(
             (_) {}, // We don't expect incoming data on response channel
             onDone: () {
-              _logger.info('🔌 Stream channel with $fromAtSign closed');
+              _logger.info('🔌 Disconnected: $fromAtSign');
               _activeChannels.remove(fromAtSign);
             },
             onError: (error) {
@@ -360,7 +360,7 @@ class AtPlatformService {
         },
         onError: (error, stackTrace) {
           _logger.warning('⚠️ Stream channel error: $error');
-          _logger.warning('Stack trace: $stackTrace');
+          _logger.fine('Stack trace: $stackTrace');
         },
         onDone: () {
           _logger.info('🔌 Stream channel listener closed');
@@ -368,7 +368,7 @@ class AtPlatformService {
         cancelOnError: false,
       );
 
-      _logger.info('✅ Response stream listener is ACTIVE');
+      _logger.fine('✅ Response stream listener is ACTIVE');
     } catch (e, stackTrace) {
       _logger.severe('Failed to start response stream listener', e, stackTrace);
       rethrow;

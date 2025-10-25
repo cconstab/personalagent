@@ -25,28 +25,22 @@ class ConversationStorageService {
     _atClient = AtClientManager.getInstance().atClient;
 
     if (_atClient == null) {
-      debugPrint('⚠️ AtClient not ready yet, waiting...');
       // AtClient not ready yet, but will be initialized soon
       // This is not a fatal error - we'll check again when needed
       return;
     }
-
-    debugPrint(
-        '💾 ConversationStorageService initialized with AtClient for ${_atClient!.getCurrentAtSign()}');
   }
 
   /// Save a conversation to atPlatform
   /// Creates/updates an atKey with 7-day TTL that refreshes on each save
   Future<void> saveConversation(Conversation conversation) async {
     if (_atClient == null) {
-      debugPrint('⚠️ AtClient not ready, cannot save conversation yet');
       return; // Silently return instead of throwing during initialization
     }
 
     // Check if AtClient is authenticated (has a current @sign)
     final currentAtSign = _atClient!.getCurrentAtSign();
     if (currentAtSign == null) {
-      debugPrint('⚠️ AtClient not authenticated yet, cannot save conversation');
       return; // Silently return instead of throwing during initialization
     }
 
@@ -65,22 +59,12 @@ class ConversationStorageService {
       final jsonData = jsonEncode(conversation.toJson());
 
       // Save to atPlatform - MUST push to remote server for cross-device sync
-      final putResult = await _atClient!.put(
+      await _atClient!.put(
         key,
         jsonData,
         putRequestOptions: PutRequestOptions()
           ..useRemoteAtServer = true, // Push to remote server for sync
       );
-
-      debugPrint(
-          '💾 Saved conversation ${conversation.id} to atPlatform (remote)');
-      debugPrint('   @sign: $currentAtSign');
-      debugPrint('   Key: ${key.toString()}');
-      debugPrint('   Title: ${conversation.title}');
-      debugPrint('   Messages: ${conversation.messages.length}');
-      debugPrint('   TTL: $_ttlMilliseconds ms ($_ttlDays days)');
-      debugPrint('   useRemoteAtServer: true');
-      debugPrint('   Commit: ${putResult ? "success" : "failed"}');
     } catch (e) {
       debugPrint('❌ Error saving conversation: $e');
       rethrow;
