@@ -181,6 +181,21 @@ class AtClientService {
       _reconnectAttempts = 0;
       debugPrint('✅ Stream connection established to $_agentAtSign');
 
+      // Send a ping to let the agent know we're connected
+      // This is important after agent restarts - the agent won't know we're here
+      // until we send something through the channel
+      try {
+        _responseStreamChannel!.sink.add(json.encode({
+          'type': 'ping',
+          'from': _currentAtSign,
+          'timestamp': DateTime.now().toIso8601String(),
+        }));
+        debugPrint('📡 Sent connection ping to $_agentAtSign');
+      } catch (e) {
+        debugPrint('⚠️ Failed to send ping: $e');
+        // Not fatal, continue with connection
+      }
+
       // Listen for incoming messages from agent
       _responseStreamChannel!.stream.listen(
         (String responseJson) {

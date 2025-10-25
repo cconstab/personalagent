@@ -304,6 +304,8 @@ class AtPlatformService {
     final channel = _activeChannels[recipientAtSign];
 
     if (channel == null) {
+      _logger.warning('No active stream channel for $recipientAtSign');
+      _logger.warning('Active channels: ${_activeChannels.keys.join(", ")}');
       throw Exception('No active stream channel for $recipientAtSign. App must connect before sending queries.');
     }
 
@@ -344,10 +346,21 @@ class AtPlatformService {
 
           // Store the channel for this user
           _activeChannels[fromAtSign] = channel;
+          _logger.info('   Total active channels: ${_activeChannels.length}');
 
-          // Listen for channel closure
+          // Listen for incoming data and channel closure
           channel.stream.listen(
-            (_) {}, // We don't expect incoming data on response channel
+            (data) {
+              // Handle ping messages from app
+              try {
+                final decoded = json.decode(data);
+                if (decoded['type'] == 'ping') {
+                  _logger.fine('📡 Received ping from $fromAtSign');
+                }
+              } catch (e) {
+                // Ignore parse errors - might not be JSON
+              }
+            },
             onDone: () {
               _logger.info('🔌 Disconnected: $fromAtSign');
               _activeChannels.remove(fromAtSign);
