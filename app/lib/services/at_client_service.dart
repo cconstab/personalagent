@@ -21,7 +21,7 @@ class AtClientService {
 
   final _messageController = StreamController<ChatMessage>.broadcast();
   Stream<ChatMessage> get messageStream => _messageController.stream;
-  
+
   // Auto-reconnect state
   bool _shouldReconnect = true;
   int _reconnectAttempts = 0;
@@ -240,13 +240,13 @@ class AtClientService {
         },
         onError: (error) {
           debugPrint('❌ Response stream error: $error');
-          
+
           // Attempt to reconnect on error
           _scheduleReconnect();
         },
         onDone: () {
           debugPrint('🔌 Stream connection closed');
-          
+
           // Attempt to reconnect when stream closes
           _scheduleReconnect();
         },
@@ -257,7 +257,7 @@ class AtClientService {
     } catch (e, stackTrace) {
       debugPrint('❌ Failed to establish stream connection: $e');
       debugPrint('StackTrace: $stackTrace');
-      
+
       // Schedule reconnect on connection failure
       _scheduleReconnect();
     }
@@ -270,12 +270,12 @@ class AtClientService {
     _reconnectTimer?.cancel();
 
     _reconnectAttempts++;
-    
+
     // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
     final delay = Duration(
-      seconds: (_reconnectAttempts < 5) 
-        ? (1 << (_reconnectAttempts - 1)) // 2^(n-1)
-        : 30, // Cap at 30 seconds
+      seconds: (_reconnectAttempts < 5)
+          ? (1 << (_reconnectAttempts - 1)) // 2^(n-1)
+          : 30, // Cap at 30 seconds
     );
 
     debugPrint('🔄 Scheduling reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
