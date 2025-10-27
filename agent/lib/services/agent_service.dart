@@ -125,7 +125,10 @@ class AgentService {
           errorResponse,
         );
       } catch (sendError) {
-        _logger.severe('[${query.id}] Failed to send error response', sendError);
+        _logger.severe(
+          '[${query.id}] Failed to send error response',
+          sendError,
+        );
       }
     }
   }
@@ -162,13 +165,19 @@ class AgentService {
       if (analysis.canAnswerLocally &&
           analysis.confidence >= privacyThreshold) {
         // Process locally with Ollama (95% of queries)
-        _logger.info('[${query.id}] ✅ Using Ollama only (confidence: ${analysis.confidence.toStringAsFixed(2)})');
+        _logger.info(
+          '[${query.id}] ✅ Using Ollama only (confidence: ${analysis.confidence.toStringAsFixed(2)})',
+        );
         return await _processWithOllama(query, context);
       } else {
         // Need external knowledge (5% of queries)
-        _logger.shout('[${query.id}] 🌐 Using HYBRID mode (Ollama + Claude) - external LLM required');
+        _logger.shout(
+          '[${query.id}] 🌐 Using HYBRID mode (Ollama + Claude) - external LLM required',
+        );
         _logger.shout('[${query.id}]    Reason: ${analysis.reasoning}');
-        _logger.shout('[${query.id}]    Confidence: ${analysis.confidence.toStringAsFixed(2)} (threshold: $privacyThreshold)');
+        _logger.shout(
+          '[${query.id}]    Confidence: ${analysis.confidence.toStringAsFixed(2)} (threshold: $privacyThreshold)',
+        );
         return await _processWithHybrid(query, context, analysis);
       }
     } catch (e, stackTrace) {
@@ -206,7 +215,9 @@ class AgentService {
     QueryMessage query,
     String context,
   ) async {
-    _logger.fine('[${query.id}] Processing with Ollama only (fully private)');    // Agents are now stateless - conversation history comes from the app
+    _logger.fine(
+      '[${query.id}] Processing with Ollama only (fully private)',
+    ); // Agents are now stateless - conversation history comes from the app
     final hasHistory =
         query.conversationHistory != null &&
         query.conversationHistory!.isNotEmpty;
@@ -362,11 +373,15 @@ Respond naturally and conversationally.
     AnalysisResult analysis,
   ) async {
     if (claude == null) {
-      _logger.warning('[${query.id}] ⚠️ Claude not available, falling back to Ollama only');
+      _logger.warning(
+        '[${query.id}] ⚠️ Claude not available, falling back to Ollama only',
+      );
       return await _processWithOllama(query, context);
     }
 
-    _logger.shout('[${query.id}] 🌐 HYBRID MODE: Using Claude for external knowledge');
+    _logger.shout(
+      '[${query.id}] 🌐 HYBRID MODE: Using Claude for external knowledge',
+    );
     _logger.info('[${query.id}]    Analysis: ${analysis.reasoning}');
 
     // Agents are now stateless - use conversation history from app
@@ -413,8 +428,12 @@ Respond naturally and conversationally.
     }
 
     final claudeResponseContent = claudeFullResponse.toString();
-    _logger.shout('[${query.id}] ✅ Received ${claudeResponseContent.length} characters from Claude');
-    _logger.info('[${query.id}]    Now synthesizing with Ollama for personalization...');
+    _logger.shout(
+      '[${query.id}] ✅ Received ${claudeResponseContent.length} characters from Claude',
+    );
+    _logger.info(
+      '[${query.id}]    Now synthesizing with Ollama for personalization...',
+    );
 
     // Step 3: Combine Claude's knowledge with user context using Ollama with streaming
     // Build full prompt including conversation history
@@ -447,7 +466,9 @@ $claudeResponseContent
     promptBuffer.write('User: ${query.content}');
 
     // Stream Ollama's final synthesis with batching
-    _logger.info('[${query.id}] 🤖 Synthesizing final response with Ollama streaming...');
+    _logger.info(
+      '[${query.id}] 🤖 Synthesizing final response with Ollama streaming...',
+    );
     final StringBuffer fullResponse = StringBuffer();
     int chunkIndex = 0;
     DateTime lastSendTime = DateTime.now();
@@ -513,9 +534,13 @@ $claudeResponseContent
     }
 
     // Return final complete message
-    _logger.shout('[${query.id}] ✅ HYBRID processing complete: Claude + Ollama synthesis');
-    _logger.info('[${query.id}]    Final response length: ${fullResponse.length} characters');
-    
+    _logger.shout(
+      '[${query.id}] ✅ HYBRID processing complete: Claude + Ollama synthesis',
+    );
+    _logger.info(
+      '[${query.id}]    Final response length: ${fullResponse.length} characters',
+    );
+
     return ResponseMessage(
       id: query.id,
       content: fullResponse.toString(),

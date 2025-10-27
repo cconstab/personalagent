@@ -510,9 +510,7 @@ class AtPlatformService {
 
       // If this is the final message, send disconnect and cleanup
       if (!response.isPartial) {
-        _logger.info(
-          '[${queryId}] 🏁 Sending final message, will disconnect',
-        );
+        _logger.info('[${queryId}] 🏁 Sending final message, will disconnect');
 
         // Give a brief moment for the message to be sent
         await Future.delayed(const Duration(milliseconds: 100));
@@ -527,7 +525,11 @@ class AtPlatformService {
         _logger.info('[${queryId}] ✅ Completed query, cleaned up channel');
       }
     } catch (e, stackTrace) {
-      _logger.severe('[${queryId}] Failed to send response to query stream', e, stackTrace);
+      _logger.severe(
+        '[${queryId}] Failed to send response to query stream',
+        e,
+        stackTrace,
+      );
 
       // Remove channel from cache - it's likely invalid now
       _queryChannels.remove(queryId);
