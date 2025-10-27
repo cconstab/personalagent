@@ -30,12 +30,6 @@ class AtClientService {
   int _reconnectAttempts = 0;
   Timer? _reconnectTimer;
 
-  // Heartbeat state
-  Timer? _heartbeatTimer;
-  Timer? _pongTimeoutTimer;
-  static const Duration _heartbeatInterval = Duration(seconds: 10);
-  static const Duration _pongTimeout = Duration(seconds: 5);
-
   // Query-specific stream subscriptions tracking
   final Map<String, StreamSubscription> _querySubscriptions = {};
 
@@ -295,21 +289,6 @@ class AtClientService {
       _reconnectAttempts = 0;
       debugPrint('✅ Stream connection established to $_agentAtSign');
 
-      // Send a ping to let the agent know we're connected
-      // This is important after agent restarts - the agent won't know we're here
-      // until we send something through the channel
-      try {
-        _responseStreamChannel!.sink.add(json.encode({
-          'type': 'ping',
-          'from': _currentAtSign,
-          'timestamp': DateTime.now().toIso8601String(),
-        }));
-        debugPrint('📡 Sent connection ping to $_agentAtSign');
-      } catch (e) {
-        debugPrint('⚠️ Failed to send ping: $e');
-        // Not fatal, continue with connection
-      }
-
       // Listen for incoming messages from agent
       _responseStreamChannel!.stream.listen(
         (String responseJson) {
@@ -318,14 +297,9 @@ class AtClientService {
             final responseData =
                 json.decode(responseJson) as Map<String, dynamic>;
 
-            // Check if this is a pong response
-            if (responseData['type'] == 'pong') {
-              final agentName = responseData['agentName'] as String?;
-              final agentInfo = agentName != null && agentName.isNotEmpty
-                  ? '$_agentAtSign ($agentName)'
-                  : '$_agentAtSign';
-              debugPrint('🏓 Received pong from $agentInfo');
-              _pongTimeoutTimer?.cancel(); // Cancel timeout - agent is alive
+            // Ignore ping/pong messages (no longer used for heartbeat)
+            if (responseData['type'] == 'ping' ||
+                responseData['type'] == 'pong') {
               return;
             }
 
@@ -367,24 +341,19 @@ class AtClientService {
         },
         onError: (error) {
           debugPrint('❌ General stream error: $error');
-          debugPrint('   (Query-specific streams continue working)');
+          debugPrint('   (This does not affect query-specific streams)');
 
-          // Stop heartbeat and attempt to reconnect on error
-          _stopHeartbeat();
+          // Attempt to reconnect on error
           _scheduleReconnect();
         },
         onDone: () {
           debugPrint('🔌 General stream connection closed');
           debugPrint('   (Query-specific streams continue working)');
 
-          // Stop heartbeat and attempt to reconnect when stream closes
-          _stopHeartbeat();
+          // Attempt to reconnect when stream closes
           _scheduleReconnect();
         },
       );
-
-      // Start periodic heartbeat to detect stale connections
-      _startHeartbeat();
 
       // Note: We don't close the channel here - it stays open for the session
       // The channel will be closed when the app resets or disposes
@@ -576,7 +545,6 @@ class AtClientService {
   /// Cleanup resources
   void dispose() {
     stopReconnect();
-    _stopHeartbeat();
 
     // Cancel all query-specific subscriptions
     for (final subscription in _querySubscriptions.values) {
@@ -587,57 +555,5 @@ class AtClientService {
         '🧹 Cleaned up ${_querySubscriptions.length} query subscriptions');
 
     _messageController.close();
-  }
-
-  /// Start periodic heartbeat to detect stale connections
-  void _startHeartbeat() {
-    _stopHeartbeat(); // Clear any existing heartbeat
-
-    debugPrint(
-        '💓 Starting heartbeat (${_heartbeatInterval.inSeconds}s interval)');
-
-    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
-      _sendHeartbeat();
-    });
-  }
-
-  /// Stop heartbeat timers
-  void _stopHeartbeat() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-    _pongTimeoutTimer?.cancel();
-    _pongTimeoutTimer = null;
-  }
-
-  /// Send heartbeat ping to agent
-  void _sendHeartbeat() {
-    if (_responseStreamChannel == null) {
-      debugPrint('⚠️ Cannot send heartbeat - no stream channel');
-      return;
-    }
-
-    try {
-      debugPrint('💓 Sending heartbeat ping');
-
-      // Send ping
-      _responseStreamChannel!.sink.add(json.encode({
-        'type': 'ping',
-        'from': _currentAtSign,
-        'timestamp': DateTime.now().toIso8601String(),
-      }));
-
-      // Start timeout timer - if no pong received, reconnect
-      _pongTimeoutTimer?.cancel();
-      _pongTimeoutTimer = Timer(_pongTimeout, () {
-        debugPrint('💔 Heartbeat timeout - no pong received, reconnecting...');
-        _stopHeartbeat();
-        _scheduleReconnect();
-      });
-    } catch (e) {
-      debugPrint('⚠️ Failed to send heartbeat: $e');
-      // Connection is stale, reconnect
-      _stopHeartbeat();
-      _scheduleReconnect();
-    }
   }
 }

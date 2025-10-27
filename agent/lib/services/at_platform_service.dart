@@ -583,32 +583,11 @@ class AtPlatformService {
           // Listen for incoming data and channel closure
           channel.stream.listen(
             (data) {
-              // Handle ping messages from app
-              try {
-                final decoded = json.decode(data);
-                if (decoded['type'] == 'ping') {
-                  _logger.fine(
-                    '📡 Received ping from $fromAtSign, sending pong',
-                  );
-                  // Respond with pong
-                  try {
-                    channel.sink.add(
-                      json.encode({
-                        'type': 'pong',
-                        'timestamp': DateTime.now().toIso8601String(),
-                        'agentName': instanceId,
-                      }),
-                    );
-                    _logger.fine('🏓 Sent pong to $fromAtSign');
-                  } catch (e) {
-                    _logger.warning(
-                      '⚠️ Failed to send pong to $fromAtSign: $e',
-                    );
-                  }
-                }
-              } catch (e) {
-                // Ignore parse errors - might not be JSON
-              }
+              // Could handle control messages here in the future
+              // For now, just ignore incoming data on the general stream
+              _logger.fine(
+                '📥 Received data from $fromAtSign: ${data.substring(0, 50)}...',
+              );
             },
             onDone: () {
               _logger.info('🔌 Disconnected: $fromAtSign');
