@@ -23,6 +23,10 @@ class AtPlatformService {
   final Map<String, AtNotificationStreamChannel<String, String>>
   _activeChannels = {};
 
+  // Store query-specific channels (key: queryId)
+  final Map<String, AtNotificationStreamChannel<String, String>>
+  _queryChannels = {};
+
   AtPlatformService({
     required this.atSign,
     required this.keysFilePath,
@@ -458,35 +462,69 @@ class AtPlatformService {
     _ensureInitialized();
 
     try {
-      _logger.info('🔗 Connecting to query-specific stream: response.$queryId');
+      // Check if we already have a channel for this query
+      AtNotificationStreamChannel<String, String>? channel =
+          _queryChannels[queryId];
 
-      // Connect to the app's bound stream for this specific query
-      final channel = await AtNotificationStreamChannel.connect<String, String>(
-        _atClient!,
-        otherAtsign: recipientAtSign,
-        baseNamespace: 'personalagent',
-        domainNamespace: 'response.$queryId', // Query-specific namespace
-        sendTransformer: const MessageSendTransformer(),
-        recvTransformer: const QueryReceiveTransformer(),
-      );
+      if (channel == null) {
+        // First message for this query - establish connection
+        _logger.info(
+          '🔗 Connecting to query-specific stream: response.$queryId',
+        );
 
-      _logger.info('✅ Connected to query stream for $queryId');
+        channel = await AtNotificationStreamChannel.connect<String, String>(
+          _atClient!,
+          otherAtsign: recipientAtSign,
+          baseNamespace: 'personalagent',
+          domainNamespace: 'response.$queryId', // Query-specific namespace
+          sendTransformer: const MessageSendTransformer(),
+          recvTransformer: const QueryReceiveTransformer(),
+        );
 
-      // Send the response (may be streamed in chunks)
+        // Cache the channel for reuse
+        _queryChannels[queryId] = channel;
+        _logger.info('✅ Connected to query stream for $queryId');
+      }
+
+      // Send the response through the existing/cached channel
       final jsonData = json.encode(response.toJson());
       channel.sink.add(jsonData);
-      _logger.info('📤 Sent response for query $queryId');
+      _logger.fine(
+        '📤 Sent response for query $queryId (isPartial: ${response.isPartial})',
+      );
 
-      // Don't close the channel - let the app handle cleanup
-      // The app is listening on this query-specific stream and will
-      // close it when done. Closing too early can cut off the message.
+      // If this is the final message, send disconnect and cleanup
       if (!response.isPartial) {
-        _logger.fine(
-          '✅ Final message sent for query $queryId (not closing channel)',
+        _logger.info(
+          '🏁 Sending final message for query $queryId, will disconnect',
         );
+
+        // Give a brief moment for the message to be sent
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Send disconnect control message
+        channel.sink.add(json.encode({'control': 'disconnect'}));
+
+        // Give time for disconnect message to be sent, then remove from cache
+        // Don't explicitly close the sink - let it be garbage collected
+        await Future.delayed(const Duration(milliseconds: 100));
+        _queryChannels.remove(queryId);
+        _logger.info('✅ Completed query $queryId, cleaned up channel');
       }
     } catch (e, stackTrace) {
       _logger.severe('Failed to send response to query stream', e, stackTrace);
+
+      // Only remove channel from cache if it's a connection/channel error
+      // For other errors, keep the channel cached for retry
+      if (e.toString().contains('channel') ||
+          e.toString().contains('connection') ||
+          e.toString().contains('closed')) {
+        _queryChannels.remove(queryId);
+        _logger.warning(
+          'Removed cached channel for query $queryId due to error',
+        );
+      }
+
       rethrow;
     }
   }
@@ -534,6 +572,7 @@ class AtPlatformService {
                       json.encode({
                         'type': 'pong',
                         'timestamp': DateTime.now().toIso8601String(),
+                        'agentName': instanceId,
                       }),
                     );
                     _logger.fine('🏓 Sent pong to $fromAtSign');

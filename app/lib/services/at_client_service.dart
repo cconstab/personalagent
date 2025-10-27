@@ -36,6 +36,9 @@ class AtClientService {
   static const Duration _heartbeatInterval = Duration(seconds: 10);
   static const Duration _pongTimeout = Duration(seconds: 5);
 
+  // Query-specific stream subscriptions tracking
+  final Map<String, StreamSubscription> _querySubscriptions = {};
+
   bool get isInitialized => _atClient != null;
   String? get currentAtSign => _currentAtSign;
   String? get agentAtSign => _agentAtSign;
@@ -81,11 +84,12 @@ class AtClientService {
   }
 
   /// Send a query message to the agent with conversation context
-  Future<void> sendQuery(
+  Future<void> sendMessage(
     ChatMessage message, {
     bool useOllamaOnly = false,
     List<ChatMessage>? conversationHistory,
-    String? conversationId,
+    required String
+        conversationId, // NOW REQUIRED - messages must belong to a conversation
   }) async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized. Call initialize() first.');
@@ -99,6 +103,10 @@ class AtClientService {
       // Create a unique response channel for THIS query only
       // This ensures we only get responses for this specific query
       final queryId = message.id;
+
+      // Cancel any existing subscription for this query (shouldn't happen, but be safe)
+      _querySubscriptions[queryId]?.cancel();
+
       debugPrint('📡 Setting up response stream listener for query $queryId');
 
       // Start listening for agent connections on this query-specific namespace
@@ -110,8 +118,8 @@ class AtClientService {
         recvTransformer: MessageReceiveTransformer(),
       );
 
-      // Set up the listener for when agent connects
-      bindStream.listen((responseChannel) {
+      // Track the subscription so we can cancel it later
+      _querySubscriptions[queryId] = bindStream.listen((responseChannel) {
         debugPrint('🔗 Agent connected to response stream for query $queryId');
 
         // Listen for agent's responses on this channel
@@ -142,6 +150,11 @@ class AtClientService {
               if (responseMessage.isPartial == false) {
                 _logger.info(
                     '✅ Received complete response from ${responseMessage.agentName ?? "agent"}');
+
+                // Clean up subscription when final message received
+                _querySubscriptions[queryId]?.cancel();
+                _querySubscriptions.remove(queryId);
+                debugPrint('🧹 Cleaned up subscription for query $queryId');
               }
 
               _messageController.add(responseMessage);
@@ -152,9 +165,12 @@ class AtClientService {
           },
           onDone: () {
             debugPrint('✅ Response stream closed for query $queryId');
+            _querySubscriptions.remove(queryId);
           },
           onError: (error) {
             debugPrint('❌ Response stream error for query $queryId: $error');
+            _querySubscriptions[queryId]?.cancel();
+            _querySubscriptions.remove(queryId);
           },
         );
       });
@@ -183,9 +199,8 @@ class AtClientService {
         'timestamp': message.timestamp.toIso8601String(),
         'useOllamaOnly': useOllamaOnly,
         'conversationHistory': context, // Include conversation context
-        if (conversationId != null)
-          'conversationId':
-              conversationId, // Include conversation ID for response routing
+        'conversationId':
+            conversationId, // Include conversation ID for response routing (ALWAYS required)
       };
 
       // Send as notification with same pattern as at_talk
@@ -291,7 +306,11 @@ class AtClientService {
 
             // Check if this is a pong response
             if (responseData['type'] == 'pong') {
-              debugPrint('🏓 Received pong from $_agentAtSign');
+              final agentName = responseData['agentName'] as String?;
+              final agentInfo = agentName != null && agentName.isNotEmpty
+                  ? '$_agentAtSign ($agentName)'
+                  : '$_agentAtSign';
+              debugPrint('🏓 Received pong from $agentInfo');
               _pongTimeoutTimer?.cancel(); // Cancel timeout - agent is alive
               return;
             }
@@ -333,14 +352,16 @@ class AtClientService {
           }
         },
         onError: (error) {
-          debugPrint('❌ Response stream error: $error');
+          debugPrint('❌ General stream error: $error');
+          debugPrint('   (Query-specific streams continue working)');
 
           // Stop heartbeat and attempt to reconnect on error
           _stopHeartbeat();
           _scheduleReconnect();
         },
         onDone: () {
-          debugPrint('🔌 Stream connection closed');
+          debugPrint('🔌 General stream connection closed');
+          debugPrint('   (Query-specific streams continue working)');
 
           // Stop heartbeat and attempt to reconnect when stream closes
           _stopHeartbeat();
@@ -370,15 +391,16 @@ class AtClientService {
 
     _reconnectAttempts++;
 
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+    // Exponential backoff: 2s, 4s, 8s, 16s, 32s, max 60s
+    // Longer delays since query-specific streams handle actual queries
     final delay = Duration(
-      seconds: (_reconnectAttempts < 5)
-          ? (1 << (_reconnectAttempts - 1)) // 2^(n-1)
-          : 30, // Cap at 30 seconds
+      seconds: (_reconnectAttempts < 6)
+          ? (1 << _reconnectAttempts) // 2^n: 2, 4, 8, 16, 32, 64
+          : 60, // Cap at 60 seconds
     );
 
     debugPrint(
-        '🔄 Scheduling reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
+        '🔄 Scheduling general stream reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
 
     _reconnectTimer = Timer(delay, () {
       _connectToStreamWithRetry();
@@ -541,6 +563,15 @@ class AtClientService {
   void dispose() {
     stopReconnect();
     _stopHeartbeat();
+
+    // Cancel all query-specific subscriptions
+    for (final subscription in _querySubscriptions.values) {
+      subscription.cancel();
+    }
+    _querySubscriptions.clear();
+    debugPrint(
+        '🧹 Cleaned up ${_querySubscriptions.length} query subscriptions');
+
     _messageController.close();
   }
 

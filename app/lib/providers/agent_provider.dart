@@ -677,7 +677,7 @@ class AgentProvider extends ChangeNotifier {
           '📝 Including ${conversationHistory.length} previous messages for context');
 
       // Send message to agent via atPlatform with conversation context and ID
-      await _atClientService.sendQuery(
+      await _atClientService.sendMessage(
         userMessage,
         useOllamaOnly: _useOllamaOnly,
         conversationHistory: conversationHistory,

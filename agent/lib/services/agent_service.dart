@@ -68,6 +68,17 @@ class AgentService {
     try {
       _logger.shout('📨 Query from ${query.userId}');
 
+      // Warn if conversationId is missing - this should NEVER happen
+      if (query.conversationId == null || query.conversationId!.isEmpty) {
+        _logger.warning(
+          '⚠️ Query ${query.id} has NO conversationId! Response will be dropped by app!',
+        );
+      } else {
+        _logger.fine(
+          '🔗 Query ${query.id} → conversation ${query.conversationId}',
+        );
+      }
+
       // Try to acquire mutex for this query (only one agent responds)
       final acquired = await _tryAcquireMutexWrapper(query.id);
 
@@ -303,12 +314,18 @@ Respond naturally and conversationally.
             '📤 Sending PARTIAL chunk #$chunkIndex (${fullResponse.length} chars)',
           );
 
-          // Fire-and-forget for better performance (don't await)
-          atPlatform
-              .sendStreamResponseToQuery(query.userId, query.id, partialMessage)
-              .catchError((e) {
-                _logger.warning('Failed to send streaming chunk: $e');
-              });
+          // Send chunk and await to ensure it completes
+          // This maintains channel caching and prevents errors
+          try {
+            await atPlatform.sendStreamResponseToQuery(
+              query.userId,
+              query.id,
+              partialMessage,
+            );
+          } catch (e) {
+            _logger.warning('Failed to send streaming chunk: $e');
+            // Continue processing even if one chunk fails
+          }
 
           lastSendTime = DateTime.now();
           charsSinceLastSend = 0;
@@ -466,12 +483,18 @@ $claudeResponseContent
             chunkIndex: chunkIndex++,
           );
 
-          // Fire-and-forget for better performance (don't await)
-          atPlatform
-              .sendStreamResponseToQuery(query.userId, query.id, partialMessage)
-              .catchError((e) {
-                _logger.warning('Failed to send streaming chunk: $e');
-              });
+          // Send chunk and await to ensure it completes
+          // This maintains channel caching and prevents errors
+          try {
+            await atPlatform.sendStreamResponseToQuery(
+              query.userId,
+              query.id,
+              partialMessage,
+            );
+          } catch (e) {
+            _logger.warning('Failed to send streaming chunk: $e');
+            // Continue processing even if one chunk fails
+          }
 
           lastSendTime = DateTime.now();
           charsSinceLastSend = 0;
