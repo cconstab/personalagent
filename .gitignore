@@ -39,6 +39,15 @@ coverage/
 *.mocks.dart
 *.freezed.dart
 
+# Flutter platform generated files
+**/GeneratedPluginRegistrant.swift
+**/GeneratedPluginRegistrant.java
+**/GeneratedPluginRegistrant.h
+**/GeneratedPluginRegistrant.m
+**/generated_plugin_registrant.cc
+**/generated_plugin_registrant.h
+**/generated_plugins.cmake
+
 # Directory created by dartdoc
 doc/api/
 
