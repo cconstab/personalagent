@@ -133,7 +133,7 @@ class AtClientService {
               if (responseData.containsKey('control')) {
                 final controlType = responseData['control'];
                 debugPrint('📡 Received control message: $controlType');
-                
+
                 if (controlType == 'disconnect') {
                   debugPrint('🔌 Agent signaled disconnect for query $queryId');
                   // Clean up subscription

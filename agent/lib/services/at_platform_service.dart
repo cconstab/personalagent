@@ -531,9 +531,7 @@ class AtPlatformService {
 
       // Remove channel from cache - it's likely invalid now
       _queryChannels.remove(queryId);
-      _logger.warning(
-        'Removed cached channel for query $queryId due to error',
-      );
+      _logger.warning('Removed cached channel for query $queryId due to error');
 
       // Check if this is a timeout or network error - these are recoverable
       final errorString = e.toString().toLowerCase();
