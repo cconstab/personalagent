@@ -129,6 +129,20 @@ class AtClientService {
               final responseData =
                   json.decode(responseJson) as Map<String, dynamic>;
 
+              // Check for control messages (disconnect, etc.) and ignore them
+              if (responseData.containsKey('control')) {
+                final controlType = responseData['control'];
+                debugPrint('📡 Received control message: $controlType');
+                
+                if (controlType == 'disconnect') {
+                  debugPrint('🔌 Agent signaled disconnect for query $queryId');
+                  // Clean up subscription
+                  _querySubscriptions[queryId]?.cancel();
+                  _querySubscriptions.remove(queryId);
+                }
+                return; // Don't process control messages as regular messages
+              }
+
               final responseMessage = ChatMessage(
                 id: responseData['id'] ??
                     DateTime.now().millisecondsSinceEpoch.toString(),

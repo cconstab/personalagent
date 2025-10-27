@@ -389,6 +389,21 @@ class AtPlatformService {
       // Remove the channel since it's not working
       _activeChannels.remove(recipientAtSign);
 
+      // Check if this is a timeout or network error - these are recoverable
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('timeout') ||
+          errorString.contains('timed out') ||
+          errorString.contains('network') ||
+          errorString.contains('remote atsign not found') ||
+          errorString.contains('full response not received')) {
+        _logger.warning(
+          '⚠️ Network/timeout error sending to $recipientAtSign - client may retry',
+        );
+        // Don't rethrow - this is expected when network is down
+        return;
+      }
+
+      // For other unexpected errors, rethrow so caller can handle
       rethrow;
     }
   }
@@ -514,17 +529,28 @@ class AtPlatformService {
     } catch (e, stackTrace) {
       _logger.severe('Failed to send response to query stream', e, stackTrace);
 
-      // Only remove channel from cache if it's a connection/channel error
-      // For other errors, keep the channel cached for retry
-      if (e.toString().contains('channel') ||
-          e.toString().contains('connection') ||
-          e.toString().contains('closed')) {
-        _queryChannels.remove(queryId);
+      // Remove channel from cache - it's likely invalid now
+      _queryChannels.remove(queryId);
+      _logger.warning(
+        'Removed cached channel for query $queryId due to error',
+      );
+
+      // Check if this is a timeout or network error - these are recoverable
+      final errorString = e.toString().toLowerCase();
+      if (errorString.contains('timeout') ||
+          errorString.contains('timed out') ||
+          errorString.contains('network') ||
+          errorString.contains('remote atsign not found') ||
+          errorString.contains('full response not received')) {
         _logger.warning(
-          'Removed cached channel for query $queryId due to error',
+          '⚠️ Network/timeout error sending to query $queryId - client may retry',
         );
+        // Don't rethrow - this is expected when network is down
+        // The calling code already has error handling for this
+        return;
       }
 
+      // For other unexpected errors, rethrow so caller can handle
       rethrow;
     }
   }
