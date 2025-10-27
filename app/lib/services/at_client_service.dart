@@ -4,6 +4,7 @@ import 'package:at_client_mobile/at_client_mobile.dart';
 import 'package:at_commons/at_commons.dart';
 import 'package:at_stream/at_stream.dart';
 import 'package:flutter/foundation.dart';
+import 'package:logging/logging.dart';
 import '../models/message.dart';
 import 'stream_transformers.dart';
 
@@ -12,6 +13,8 @@ class AtClientService {
   static final AtClientService _instance = AtClientService._internal();
   factory AtClientService() => _instance;
   AtClientService._internal();
+
+  final _logger = Logger('AtClientService');
 
   AtClientManager? _atClientManager;
   AtClient? _atClient;
@@ -130,11 +133,16 @@ class AtClientService {
                 wasPrivacyFiltered: responseData['wasPrivacyFiltered'] ?? false,
                 agentName: responseData['agentName'] as String?,
                 model: responseData['model'] as String?,
-                isPartial: responseData['metadata']?['isPartial'] ?? false,
-                chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
-                conversationId:
-                    responseData['metadata']?['conversationId'] as String?,
+                isPartial: responseData['isPartial'] ?? false,
+                chunkIndex: responseData['chunkIndex'] as int?,
+                conversationId: responseData['conversationId'] as String?,
               );
+
+              // Log when we receive the final response
+              if (responseMessage.isPartial == false) {
+                _logger.info(
+                    '✅ Received complete response from ${responseMessage.agentName ?? "agent"}');
+              }
 
               _messageController.add(responseMessage);
             } catch (e, stackTrace) {
@@ -204,6 +212,7 @@ class AtClientService {
         waitForFinalDeliveryStatus: false,
       );
 
+      _logger.info('📤 Sent query to $_agentAtSign');
       debugPrint(
           '📤 Query notification sent, agent will connect to response.$queryId stream');
     } catch (e, stackTrace) {
@@ -300,10 +309,9 @@ class AtClientService {
               wasPrivacyFiltered: responseData['wasPrivacyFiltered'] ?? false,
               agentName: responseData['agentName'] as String?,
               model: responseData['model'] as String?,
-              isPartial: responseData['metadata']?['isPartial'] ?? false,
-              chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
-              conversationId:
-                  responseData['metadata']?['conversationId'] as String?,
+              isPartial: responseData['isPartial'] ?? false,
+              chunkIndex: responseData['chunkIndex'] as int?,
+              conversationId: responseData['conversationId'] as String?,
             );
 
             // Emit the message to listeners

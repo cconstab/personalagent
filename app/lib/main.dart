@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:logging/logging.dart';
+import 'package:at_utils/at_logger.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'providers/agent_provider.dart';
@@ -9,18 +10,24 @@ import 'providers/auth_provider.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configure logging before any other code runs
+  // Configure atPlatform SDK logging - suppress verbose SDK logs
+  // Use 'SHOUT' for critical only (quiet), 'INFO' for more detail
+  AtSignLogger.root_level = 'SHOUT';
+  AtSignLogger.defaultLoggingHandler = AtSignLogger.stdErrLoggingHandler;
+
+  // Configure app logging
   hierarchicalLoggingEnabled = true;
 
-  // Set root to WARNING level - this will suppress all INFO logs
-  Logger.root.level = Level.WARNING;
+  // Set root to INFO level - show important app messages
+  Logger.root.level = Level.INFO;
 
   // Clear any existing listeners that the SDK may have added
   Logger.root.clearListeners();
 
-  // Add our own listener for WARNING and above
+  // Add our own listener for INFO and above
   Logger.root.onRecord.listen((record) {
-    debugPrint('${record.level.name}|${record.time}|${record.loggerName}|${record.message}');
+    debugPrint(
+        '${record.level.name}|${record.time}|${record.loggerName}|${record.message}');
   });
 
   runApp(const MyApp());

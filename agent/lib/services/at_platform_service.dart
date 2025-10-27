@@ -477,10 +477,13 @@ class AtPlatformService {
       channel.sink.add(jsonData);
       _logger.info('📤 Sent response for query $queryId');
 
-      // Close the channel when done (for non-streaming or after final chunk)
+      // Don't close the channel - let the app handle cleanup
+      // The app is listening on this query-specific stream and will
+      // close it when done. Closing too early can cut off the message.
       if (!response.isPartial) {
-        _logger.fine('🔚 Closing query stream for $queryId (final message)');
-        await channel.sink.close();
+        _logger.fine(
+          '✅ Final message sent for query $queryId (not closing channel)',
+        );
       }
     } catch (e, stackTrace) {
       _logger.severe('Failed to send response to query stream', e, stackTrace);

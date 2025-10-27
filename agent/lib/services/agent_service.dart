@@ -66,7 +66,7 @@ class AgentService {
   /// Handle incoming query from user
   Future<void> _handleIncomingQuery(QueryMessage query) async {
     try {
-      _logger.info('⚡ Query from ${query.userId}: ${query.id}');
+      _logger.shout('📨 Query from ${query.userId}');
 
       // Try to acquire mutex for this query (only one agent responds)
       final acquired = await _tryAcquireMutexWrapper(query.id);
@@ -78,8 +78,8 @@ class AgentService {
         return; // Another agent won the race
       }
 
-      _logger.info(
-        '� Acquired mutex for query ${query.id} - this agent will respond',
+      _logger.fine(
+        '😎 Acquired mutex for query ${query.id} - this agent will respond',
       );
 
       // Process the query
@@ -92,7 +92,7 @@ class AgentService {
         response,
       );
 
-      _logger.info('✅ Sent response to ${query.userId} for query ${query.id}');
+      _logger.shout('✅ Replied to ${query.userId}');
     } catch (e, stackTrace) {
       _logger.severe('Failed to handle query', e, stackTrace);
 

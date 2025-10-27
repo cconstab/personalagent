@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:args/args.dart';
+import 'package:at_utils/at_logger.dart';
 import 'package:dotenv/dotenv.dart';
 import 'package:logging/logging.dart';
 import 'package:personal_agent/services/agent_service.dart';
@@ -25,16 +26,35 @@ void main(List<String> arguments) async {
 
   // Parse command line arguments
   final parser = ArgParser()
-    ..addFlag('help', abbr: 'h', help: 'Show this help message', negatable: false)
-    ..addFlag('verbose', abbr: 'v', help: 'Enable verbose logging', negatable: false)
+    ..addFlag(
+      'help',
+      abbr: 'h',
+      help: 'Show this help message',
+      negatable: false,
+    )
+    ..addFlag(
+      'verbose',
+      abbr: 'v',
+      help: 'Enable verbose logging',
+      negatable: false,
+    )
     ..addOption('env', abbr: 'e', help: 'Path to .env file', defaultsTo: '.env')
-    ..addOption('name', abbr: 'n', help: 'Agent name (displayed in responses)', defaultsTo: null);
+    ..addOption(
+      'name',
+      abbr: 'n',
+      help: 'Agent name (displayed in responses)',
+      defaultsTo: null,
+    );
 
   final results = parser.parse(arguments);
 
   // Configure logging level based on verbose flag
   final verbose = results['verbose'] as bool;
   Logger.root.level = verbose ? Level.ALL : Level.INFO;
+
+  // Configure atPlatform SDK logging (like sshnpd does)
+  AtSignLogger.root_level = verbose ? 'INFO' : 'SHOUT';
+  AtSignLogger.defaultLoggingHandler = AtSignLogger.stdErrLoggingHandler;
 
   if (results['help']) {
     print('Private AI Agent with atPlatform');
@@ -51,7 +71,9 @@ void main(List<String> arguments) async {
     env = DotEnv(includePlatformEnvironment: true)..load([envPath]);
     logger.info('Loaded environment from $envPath');
   } else {
-    logger.warning('No .env file found at $envPath, using environment variables');
+    logger.warning(
+      'No .env file found at $envPath, using environment variables',
+    );
   }
 
   // Helper to get env value (from .env file or platform environment)
@@ -70,7 +92,8 @@ void main(List<String> arguments) async {
   final claudeApiKey = getEnv('CLAUDE_API_KEY');
   final claudeModel = getEnv('CLAUDE_MODEL', 'claude-3-5-sonnet-20241022');
 
-  final privacyThreshold = double.tryParse(getEnv('PRIVACY_THRESHOLD', '0.7')) ?? 0.7;
+  final privacyThreshold =
+      double.tryParse(getEnv('PRIVACY_THRESHOLD', '0.7')) ?? 0.7;
 
   // Get agent name from command line or environment
   final agentName = (results['name'] as String?) ?? getEnv('AGENT_NAME', '');
@@ -90,7 +113,9 @@ void main(List<String> arguments) async {
     }
     if (verbose) {
       logger.info('   Ollama: $ollamaHost ($ollamaModel)');
-      logger.info('   Claude: ${claudeApiKey.isNotEmpty ? "enabled" : "disabled"}');
+      logger.info(
+        '   Claude: ${claudeApiKey.isNotEmpty ? "enabled" : "disabled"}',
+      );
     }
 
     final atPlatform = AtPlatformService(
@@ -102,7 +127,9 @@ void main(List<String> arguments) async {
 
     final ollama = OllamaService(host: ollamaHost, model: ollamaModel);
 
-    final claude = claudeApiKey.isNotEmpty ? ClaudeService(apiKey: claudeApiKey, model: claudeModel) : null;
+    final claude = claudeApiKey.isNotEmpty
+        ? ClaudeService(apiKey: claudeApiKey, model: claudeModel)
+        : null;
 
     final agent = AgentService(
       atPlatform: atPlatform,
