@@ -66,16 +66,16 @@ class AgentService {
   /// Handle incoming query from user
   Future<void> _handleIncomingQuery(QueryMessage query) async {
     try {
-      _logger.shout('📨 Query from ${query.userId}');
+      _logger.shout('[${query.id}] 📨 Query from ${query.userId}');
 
       // Warn if conversationId is missing - this should NEVER happen
       if (query.conversationId == null || query.conversationId!.isEmpty) {
         _logger.warning(
-          '⚠️ Query ${query.id} has NO conversationId! Response will be dropped by app!',
+          '[${query.id}] ⚠️ Query has NO conversationId! Response will be dropped by app!',
         );
       } else {
         _logger.fine(
-          '🔗 Query ${query.id} → conversation ${query.conversationId}',
+          '[${query.id}] 🔗 Query → conversation ${query.conversationId}',
         );
       }
 
@@ -103,9 +103,9 @@ class AgentService {
         response,
       );
 
-      _logger.shout('✅ Replied to ${query.userId}');
+      _logger.shout('[${query.id}] ✅ Replied to ${query.userId}');
     } catch (e, stackTrace) {
-      _logger.severe('Failed to handle query', e, stackTrace);
+      _logger.severe('[${query.id}] Failed to handle query', e, stackTrace);
 
       // Send error response
       try {
@@ -125,7 +125,7 @@ class AgentService {
           errorResponse,
         );
       } catch (sendError) {
-        _logger.severe('Failed to send error response', sendError);
+        _logger.severe('[${query.id}] Failed to send error response', sendError);
       }
     }
   }
@@ -162,13 +162,17 @@ class AgentService {
       if (analysis.canAnswerLocally &&
           analysis.confidence >= privacyThreshold) {
         // Process locally with Ollama (95% of queries)
+        _logger.info('[${query.id}] ✅ Using Ollama only (confidence: ${analysis.confidence.toStringAsFixed(2)})');
         return await _processWithOllama(query, context);
       } else {
         // Need external knowledge (5% of queries)
+        _logger.shout('[${query.id}] 🌐 Using HYBRID mode (Ollama + Claude) - external LLM required');
+        _logger.shout('[${query.id}]    Reason: ${analysis.reasoning}');
+        _logger.shout('[${query.id}]    Confidence: ${analysis.confidence.toStringAsFixed(2)} (threshold: $privacyThreshold)');
         return await _processWithHybrid(query, context, analysis);
       }
     } catch (e, stackTrace) {
-      _logger.severe('Failed to process query', e, stackTrace);
+      _logger.severe('[${query.id}] Failed to process query', e, stackTrace);
       return ResponseMessage(
         id: query.id,
         content:
@@ -202,9 +206,7 @@ class AgentService {
     QueryMessage query,
     String context,
   ) async {
-    _logger.fine('Processing with Ollama only (fully private)');
-
-    // Agents are now stateless - conversation history comes from the app
+    _logger.fine('[${query.id}] Processing with Ollama only (fully private)');    // Agents are now stateless - conversation history comes from the app
     final hasHistory =
         query.conversationHistory != null &&
         query.conversationHistory!.isNotEmpty;
@@ -256,16 +258,16 @@ Respond naturally and conversationally.
       }
     }
 
-    _logger.info('📤 Final prompt being sent to Ollama:');
+    _logger.info('[${query.id}] 📤 Final prompt being sent to Ollama:');
     final promptPreview = promptBuffer.toString().length > 200
         ? '${promptBuffer.toString().substring(0, 200)}...'
         : promptBuffer.toString();
-    _logger.info('   $promptPreview');
+    _logger.info('[${query.id}]    $promptPreview');
 
     promptBuffer.write('User: ${query.content}');
 
     _logger.info(
-      '🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming',
+      '[${query.id}] 🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming',
     );
 
     // Stream the response and send incremental updates
@@ -311,7 +313,7 @@ Respond naturally and conversationally.
           );
 
           _logger.info(
-            '📤 Sending PARTIAL chunk #$chunkIndex (${fullResponse.length} chars)',
+            '[${query.id}] 📤 Sending PARTIAL chunk #$chunkIndex (${fullResponse.length} chars)',
           );
 
           // Send chunk and await to ensure it completes
@@ -323,7 +325,7 @@ Respond naturally and conversationally.
               partialMessage,
             );
           } catch (e) {
-            _logger.warning('Failed to send streaming chunk: $e');
+            _logger.warning('[${query.id}] Failed to send streaming chunk: $e');
             // Continue processing even if one chunk fails
           }
 
@@ -333,7 +335,7 @@ Respond naturally and conversationally.
 
         if (chunk.done) {
           _logger.info(
-            '✅ Streaming complete. Sent ${chunkIndex} batched updates. Final message will be sent separately.',
+            '[${query.id}] ✅ Streaming complete. Sent $chunkIndex batched updates. Final message will be sent separately.',
           );
         }
       }
@@ -360,11 +362,12 @@ Respond naturally and conversationally.
     AnalysisResult analysis,
   ) async {
     if (claude == null) {
-      _logger.warning('Claude not available, falling back to Ollama only');
+      _logger.warning('[${query.id}] ⚠️ Claude not available, falling back to Ollama only');
       return await _processWithOllama(query, context);
     }
 
-    _logger.info('Processing with hybrid approach (Ollama + Claude)');
+    _logger.shout('[${query.id}] 🌐 HYBRID MODE: Using Claude for external knowledge');
+    _logger.info('[${query.id}]    Analysis: ${analysis.reasoning}');
 
     // Agents are now stateless - use conversation history from app
     final hasHistory =
@@ -381,7 +384,7 @@ Respond naturally and conversationally.
           : query.conversationHistory!;
 
       _logger.info(
-        'Including ${recentHistory.length} recent messages for Claude context',
+        '[${query.id}] Including ${recentHistory.length} recent messages for Claude context',
       );
       for (final msg in recentHistory) {
         final role = msg['role'] == 'user' ? 'User' : 'Assistant';
@@ -391,26 +394,27 @@ Respond naturally and conversationally.
 
     // Step 1: Sanitize the query (remove personal information)
     final sanitizedQuery = await ollama.sanitizeQuery(query.content, context);
-    _logger.info('Sanitized query: $sanitizedQuery');
+    _logger.info('[${query.id}] Sanitized query: $sanitizedQuery');
 
     // Step 2: Get general knowledge from Claude with streaming (include recent conversation context)
     final claudePrompt = conversationContext.isNotEmpty
         ? 'Recent conversation:\n$conversationContext\nUser: $sanitizedQuery'
         : sanitizedQuery;
 
-    _logger.info('🌐 Streaming response from Claude...');
+    _logger.info('[${query.id}] 🌐 Streaming response from Claude...');
     final StringBuffer claudeFullResponse = StringBuffer();
     await for (final chunk in claude!.queryStream(
       sanitizedQuery: claudePrompt,
     )) {
       claudeFullResponse.write(chunk.content);
       if (chunk.done) {
-        _logger.info('✅ Claude streaming complete');
+        _logger.info('[${query.id}] ✅ Claude streaming complete');
       }
     }
 
     final claudeResponseContent = claudeFullResponse.toString();
-    _logger.info('Received complete response from Claude');
+    _logger.shout('[${query.id}] ✅ Received ${claudeResponseContent.length} characters from Claude');
+    _logger.info('[${query.id}]    Now synthesizing with Ollama for personalization...');
 
     // Step 3: Combine Claude's knowledge with user context using Ollama with streaming
     // Build full prompt including conversation history
@@ -443,7 +447,7 @@ $claudeResponseContent
     promptBuffer.write('User: ${query.content}');
 
     // Stream Ollama's final synthesis with batching
-    _logger.info('🤖 Synthesizing final response with Ollama streaming...');
+    _logger.info('[${query.id}] 🤖 Synthesizing final response with Ollama streaming...');
     final StringBuffer fullResponse = StringBuffer();
     int chunkIndex = 0;
     DateTime lastSendTime = DateTime.now();
@@ -492,7 +496,7 @@ $claudeResponseContent
               partialMessage,
             );
           } catch (e) {
-            _logger.warning('Failed to send streaming chunk: $e');
+            _logger.warning('[${query.id}] Failed to send streaming chunk: $e');
             // Continue processing even if one chunk fails
           }
 
@@ -502,13 +506,16 @@ $claudeResponseContent
 
         if (chunk.done) {
           _logger.info(
-            '✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates. Final message will be sent separately.',
+            '[${query.id}] ✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates. Final message will be sent separately.',
           );
         }
       }
     }
 
     // Return final complete message
+    _logger.shout('[${query.id}] ✅ HYBRID processing complete: Claude + Ollama synthesis');
+    _logger.info('[${query.id}]    Final response length: ${fullResponse.length} characters');
+    
     return ResponseMessage(
       id: query.id,
       content: fullResponse.toString(),

@@ -258,21 +258,21 @@ class AtPlatformService {
               ),
             );
 
-            _logger.info('⚡ Processing query: ${query.id}');
+            _logger.info('[${query.id}] ⚡ Processing query');
             _logger.info(
-              '   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}',
+              '[${query.id}]    Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}',
             );
             _logger.info(
-              '   Conversation History: ${conversationHistory?.length ?? 0} messages',
+              '[${query.id}]    Conversation History: ${conversationHistory?.length ?? 0} messages',
             );
             _logger.info(
-              '   Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...',
+              '[${query.id}]    Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...',
             );
 
             // Call the callback to process the query
             await onQueryReceived(query);
 
-            _logger.info('✅ Query processed successfully');
+            _logger.info('[${query.id}] ✅ Query processed successfully');
           } catch (e, stackTrace) {
             _logger.severe('❌ Failed to parse or process query', e, stackTrace);
           }
@@ -484,7 +484,7 @@ class AtPlatformService {
       if (channel == null) {
         // First message for this query - establish connection
         _logger.info(
-          '🔗 Connecting to query-specific stream: response.$queryId',
+          '[${queryId}] 🔗 Connecting to query-specific stream: response.$queryId',
         );
 
         channel = await AtNotificationStreamChannel.connect<String, String>(
@@ -498,7 +498,7 @@ class AtPlatformService {
 
         // Cache the channel for reuse
         _queryChannels[queryId] = channel;
-        _logger.info('✅ Connected to query stream for $queryId');
+        _logger.info('[${queryId}] ✅ Connected to query stream');
       }
 
       // Send the response through the existing/cached channel
@@ -511,7 +511,7 @@ class AtPlatformService {
       // If this is the final message, send disconnect and cleanup
       if (!response.isPartial) {
         _logger.info(
-          '🏁 Sending final message for query $queryId, will disconnect',
+          '[${queryId}] 🏁 Sending final message, will disconnect',
         );
 
         // Give a brief moment for the message to be sent
@@ -524,14 +524,14 @@ class AtPlatformService {
         // Don't explicitly close the sink - let it be garbage collected
         await Future.delayed(const Duration(milliseconds: 100));
         _queryChannels.remove(queryId);
-        _logger.info('✅ Completed query $queryId, cleaned up channel');
+        _logger.info('[${queryId}] ✅ Completed query, cleaned up channel');
       }
     } catch (e, stackTrace) {
-      _logger.severe('Failed to send response to query stream', e, stackTrace);
+      _logger.severe('[${queryId}] Failed to send response to query stream', e, stackTrace);
 
       // Remove channel from cache - it's likely invalid now
       _queryChannels.remove(queryId);
-      _logger.warning('Removed cached channel for query $queryId due to error');
+      _logger.warning('[${queryId}] Removed cached channel due to error');
 
       // Check if this is a timeout or network error - these are recoverable
       final errorString = e.toString().toLowerCase();
@@ -541,7 +541,7 @@ class AtPlatformService {
           errorString.contains('remote atsign not found') ||
           errorString.contains('full response not received')) {
         _logger.warning(
-          '⚠️ Network/timeout error sending to query $queryId - client may retry',
+          '[${queryId}] ⚠️ Network/timeout error - client may retry',
         );
         // Don't rethrow - this is expected when network is down
         // The calling code already has error handling for this
