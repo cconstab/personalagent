@@ -279,11 +279,12 @@ Respond naturally and conversationally.
             .difference(lastSendTime)
             .inMilliseconds;
         final shouldSend =
-            chunk.done ||
             charsSinceLastSend >= minCharsBeforeSend ||
             timeSinceLastSend >= sendIntervalMs;
 
-        if (shouldSend) {
+        // Only send partial chunks during streaming, not the final one
+        // The final complete message will be sent after the loop
+        if (shouldSend && !chunk.done) {
           // Send partial response update
           final partialMessage = ResponseMessage(
             id: query.id,
@@ -294,33 +295,29 @@ Respond naturally and conversationally.
             agentName: agentName,
             model: ollama.model,
             conversationId: query.conversationId, // Echo back conversation ID
-            isPartial: !chunk.done,
+            isPartial: true,
             chunkIndex: chunkIndex++,
           );
 
           _logger.info(
-            '📤 Sending ${chunk.done ? 'FINAL' : 'PARTIAL'} chunk #$chunkIndex (${fullResponse.length} chars, isPartial: ${!chunk.done})',
+            '📤 Sending PARTIAL chunk #$chunkIndex (${fullResponse.length} chars)',
           );
 
           // Fire-and-forget for better performance (don't await)
           atPlatform
-              .sendStreamResponse(
-                query.userId,
-                partialMessage,
-                streamSessionId: query.streamSessionId,
-              )
+              .sendStreamResponseToQuery(query.userId, query.id, partialMessage)
               .catchError((e) {
                 _logger.warning('Failed to send streaming chunk: $e');
               });
 
           lastSendTime = DateTime.now();
           charsSinceLastSend = 0;
+        }
 
-          if (chunk.done) {
-            _logger.info(
-              '✅ Streaming complete. Sent ${chunkIndex} batched updates.',
-            );
-          }
+        if (chunk.done) {
+          _logger.info(
+            '✅ Streaming complete. Sent ${chunkIndex} batched updates. Final message will be sent separately.',
+          );
         }
       }
     }
@@ -449,11 +446,12 @@ $claudeResponseContent
             .difference(lastSendTime)
             .inMilliseconds;
         final shouldSend =
-            chunk.done ||
             charsSinceLastSend >= minCharsBeforeSend ||
             timeSinceLastSend >= sendIntervalMs;
 
-        if (shouldSend) {
+        // Only send partial chunks during streaming, not the final one
+        // The final complete message will be sent after the loop
+        if (shouldSend && !chunk.done) {
           // Send partial response update
           final partialMessage = ResponseMessage(
             id: query.id,
@@ -464,29 +462,25 @@ $claudeResponseContent
             agentName: agentName,
             model: '${ollama.model} + ${claude!.model}',
             conversationId: query.conversationId, // Echo back conversation ID
-            isPartial: !chunk.done,
+            isPartial: true,
             chunkIndex: chunkIndex++,
           );
 
           // Fire-and-forget for better performance (don't await)
           atPlatform
-              .sendStreamResponse(
-                query.userId,
-                partialMessage,
-                streamSessionId: query.streamSessionId,
-              )
+              .sendStreamResponseToQuery(query.userId, query.id, partialMessage)
               .catchError((e) {
                 _logger.warning('Failed to send streaming chunk: $e');
               });
 
           lastSendTime = DateTime.now();
           charsSinceLastSend = 0;
+        }
 
-          if (chunk.done) {
-            _logger.info(
-              '✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates.',
-            );
-          }
+        if (chunk.done) {
+          _logger.info(
+            '✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates. Final message will be sent separately.',
+          );
         }
       }
     }

@@ -162,6 +162,9 @@ class AgentProvider extends ChangeNotifier {
       }
 
       // Check if this is a streaming update (partial message)
+      // Cancel the query timeout since we received ANY response (partial or final)
+      _cancelQueryTimeout(message.id);
+
       if (message.isPartial) {
         // Find existing AGENT message (not user message) with this ID and update it
         final existingIndex = conversation.messages
@@ -220,9 +223,6 @@ class AgentProvider extends ChangeNotifier {
         debugPrint('📬 Received FINAL message ${message.id}');
         debugPrint(
             '   Message IDs before processing: ${conversation.messages.map((m) => m.id).toList()}');
-
-        // Cancel the query timeout since we received a response
-        _cancelQueryTimeout(message.id);
 
         // Search for existing AGENT message (not user message) with this ID
         final existingIndex = conversation.messages
