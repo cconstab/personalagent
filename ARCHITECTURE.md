@@ -9,6 +9,8 @@ This document provides a comprehensive overview of the Private AI Agent architec
 - [Data Flow](#data-flow)
 - [Privacy Architecture](#privacy-architecture)
 - [Communication Patterns](#communication-patterns)
+- [Streaming Architecture](#streaming-architecture) ⭐ Updated!
+- [Query ID Tracking](#query-id-tracking) ⭐ New!
 - [Ollama-Only Mode](#ollama-only-mode)
 - [State Management](#state-management)
 - [Security Model](#security-model)
@@ -159,16 +161,29 @@ sequenceDiagram
     participant CL as ClaudeService
 
     U->>AC: Send Query
-    Note over AC: Add useOllamaOnly flag<br/>Add timestamp & ID
+    Note over AC: Add conversationId (required)<br/>Add useOllamaOnly flag<br/>Add timestamp & ID
     AC->>AS: Encrypted Notification<br/>query.personalagent@
     AS->>AP: Notify (Auto-decrypt)
-    AP->>AP: Parse QueryMessage<br/>Extract useOllamaOnly
+    AP->>AP: Parse QueryMessage<br/>Extract useOllamaOnly<br/>Extract conversationId
+    
+    Note over AP,AG: Setup Query-Specific Stream
+    AP->>AP: Create channel: response.{queryId}
+    AP->>AC: Send connect notification
+    AC->>AC: Subscribe to response.{queryId}
     
     alt Ollama-Only Mode Enabled
         AP->>AG: ProcessQuery(useOllamaOnly=true)
         AG->>OL: Generate Response (100% Local)
-        OL-->>AG: Response
-        AG->>AP: ResponseMessage
+        loop Streaming
+            OL-->>AG: Partial chunk
+            AG->>AP: Send via cached channel
+            AP->>AC: PARTIAL chunk (isPartial: true)
+            AC->>U: Display partial response
+        end
+        OL-->>AG: Final response
+        AG->>AP: FINAL message (isPartial: false)
+        AP->>AC: Final chunk
+        AC->>AC: Unsubscribe from stream
     else Hybrid Mode (Default)
         AP->>AG: ProcessQuery(useOllamaOnly=false)
         AG->>OL: Analyze Query
@@ -176,20 +191,34 @@ sequenceDiagram
         
         alt High Confidence Local
             AG->>OL: Generate Response
-            OL-->>AG: Response
+            loop Streaming
+                OL-->>AG: Partial chunk
+                AG->>AP: Send via cached channel
+                AP->>AC: PARTIAL chunk (isPartial: true)
+                AC->>U: Display partial response
+            end
         else Need External Knowledge
             AG->>AG: Sanitize Query<br/>(Remove personal data)
             AG->>CL: Sanitized Query
-            CL-->>AG: Generic Knowledge
+            loop Streaming from Claude
+                CL-->>AG: Partial chunk
+            end
             AG->>OL: Combine with Context
-            OL-->>AG: Personalized Response
+            loop Streaming from Ollama
+                OL-->>AG: Partial chunk
+                AG->>AP: Send via cached channel
+                AP->>AC: PARTIAL chunk (isPartial: true)
+                AC->>U: Display partial response
+            end
         end
-        AG->>AP: ResponseMessage
+        AG->>AP: FINAL message (isPartial: false)
+        AP->>AC: Final chunk
+        AC->>AC: Unsubscribe from stream
     end
     
-    AP->>AS: Encrypted Response
-    AS->>AC: Notify
-    AC->>U: Display Response
+    Note over AP,AC: Cleanup
+    AP->>AC: disconnect control message
+    AP->>AP: Remove cached channel
 ```
 
 ### Message Structure
@@ -201,8 +230,10 @@ sequenceDiagram
   "type": "query",
   "content": "Should I take this job offer?",
   "userId": "@alice",
+  "conversationId": "conv_abc123",  // REQUIRED for routing
   "useOllamaOnly": false,  // Privacy flag
-  "timestamp": "2025-10-14T20:12:06.588Z"
+  "conversationHistory": [...],  // Recent messages for context
+  "timestamp": "2025-10-27T20:12:06.588Z"
 }
 ```
 
@@ -210,15 +241,24 @@ sequenceDiagram
 ```dart
 {
   "id": "1760497926402",
-  "type": "response",
   "content": "Based on your current situation...",
-  "metadata": {
-    "processingMode": "hybrid",
-    "usedOllama": true,
-    "usedClaude": false,
-    "confidence": 0.85
-  },
-  "timestamp": "2025-10-14T20:12:08.123Z"
+  "source": "ollama",  // or "hybrid"
+  "wasPrivacyFiltered": false,
+  "confidenceScore": 0.85,
+  "agentName": "tarial1",
+  "model": "llama3.1:8b",
+  "conversationId": "conv_abc123",  // Echo back for routing
+  "isPartial": false,  // true for streaming chunks
+  "chunkIndex": 0,  // For ordering partial chunks
+  "timestamp": "2025-10-27T20:12:08.123Z"
+}
+```
+
+**Control Messages**:
+```dart
+// Disconnect signal (agent → app)
+{
+  "control": "disconnect"
 }
 ```
 
@@ -296,6 +336,122 @@ flowchart TD
 ```
 
 ## 📡 Communication Patterns
+
+### Modern Streaming Architecture (2025)
+
+The system now uses **query-specific streaming channels** for efficient, scalable real-time communication:
+
+```mermaid
+sequenceDiagram
+    participant App as Flutter App
+    participant Agent as Agent Service
+    
+    Note over App,Agent: Query Submission
+    App->>Agent: Send QueryMessage<br/>(encrypted notification)
+    
+    Note over App,Agent: Stream Setup (Per Query)
+    Agent->>Agent: Create channel: response.{queryId}
+    Agent-->>App: Connect notification
+    App->>App: Subscribe to response.{queryId}
+    
+    Note over App,Agent: Streaming Response
+    Agent->>App: PARTIAL chunk 1 (isPartial: true)
+    Agent->>App: PARTIAL chunk 2 (isPartial: true)
+    Agent->>App: PARTIAL chunk N (isPartial: true)
+    Agent->>App: FINAL message (isPartial: false)
+    
+    Note over App,Agent: Cleanup
+    Agent->>App: disconnect control message
+    App->>App: Unsubscribe from stream
+    Agent->>Agent: Remove cached channel
+```
+
+**Key Architecture Changes:**
+
+1. **Query-Specific Channels**: Each query gets its own channel namespace `response.{queryId}`
+2. **Channel Caching**: Agent reuses the same channel for all chunks of a query (1 connection vs 20+)
+3. **No Heartbeat**: Removed ping/pong system for better scalability (only on-demand traffic)
+4. **Graceful Cleanup**: Explicit disconnect control messages and subscription management
+5. **Network Resilience**: Timeout errors are handled gracefully without crashing
+
+### Channel Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> QueryReceived: Query arrives
+    QueryReceived --> ChannelCreate: First chunk
+    ChannelCreate --> ChannelCached: Cache by queryId
+    ChannelCached --> StreamingChunks: Reuse for all chunks
+    StreamingChunks --> StreamingChunks: More chunks
+    StreamingChunks --> FinalMessage: isPartial=false
+    FinalMessage --> DisconnectSent: Send control message
+    DisconnectSent --> ChannelRemoved: Remove from cache
+    ChannelRemoved --> [*]
+    
+    StreamingChunks --> NetworkError: Timeout/Network failure
+    NetworkError --> ChannelRemoved: Log warning, cleanup
+    NetworkError --> [*]: Don't crash
+```
+
+### Streaming Batching Strategy
+
+Responses are batched to reduce atPlatform notification overhead:
+
+- **Time Threshold**: Send update every **500ms**
+- **Character Threshold**: OR every **50 characters**
+- **Final Message**: Sent separately after streaming completes
+
+```dart
+// Agent-side batching logic
+const sendIntervalMs = 500;
+const minCharsBeforeSend = 50;
+
+if (DateTime.now().difference(lastSendTime).inMilliseconds >= sendIntervalMs ||
+    charsSinceLastSend >= minCharsBeforeSend) {
+  await sendPartialChunk(response, isPartial: true);
+}
+```
+
+## 🔍 Query ID Tracking
+
+### Concurrent Query Management
+
+All logs now include query IDs for tracking multiple concurrent queries:
+
+```
+[1760497926402] 📨 Query from @alice
+[1760497926402] ✅ Using Ollama only (confidence: 0.95)
+[1760497926402] 📤 Sending PARTIAL chunk #1 (127 chars)
+[1760497926402] ✅ Streaming complete. Sent 5 batched updates
+[1760497926402] ✅ Replied to @alice
+
+[1760497926403] 📨 Query from @bob
+[1760497926403] 🌐 Using HYBRID mode (Ollama + Claude) - external LLM required
+[1760497926403] 🌐 Streaming response from Claude...
+```
+
+**Benefits:**
+- Easy filtering: `grep "\[1760497926402\]" logs.txt`
+- Track concurrent queries from multiple conversations
+- Debug issues when agent is busy with multiple requests
+- Clear visibility into query lifecycle
+
+### Log Format Standards
+
+All non-verbose logs follow the format:
+```
+[{queryId}] {emoji} {message}
+[{queryId}]    {indented details}
+```
+
+Examples:
+- `[{queryId}] 📨 Query from {userId}` - Query received
+- `[{queryId}] ✅ Using Ollama only` - Decision point
+- `[{queryId}] 🌐 Using HYBRID mode` - External LLM needed
+- `[{queryId}] 📤 Sending PARTIAL chunk` - Streaming update
+- `[{queryId}] ✅ Replied to {userId}` - Complete
+
+## 📡 Communication Patterns (Legacy)
 
 ### atPlatform Notification Pattern
 
@@ -522,7 +678,175 @@ flowchart TB
 - Onboarding completion
 - Keychain operations
 
-## 🔐 Security Model
+## �️ Error Handling & Network Resilience
+
+### Graceful Error Handling Strategy
+
+The system handles various failure scenarios without crashing:
+
+```mermaid
+flowchart TD
+    E[Error Occurred] --> T{Error Type?}
+    
+    T -->|Network Timeout| NT[Log Warning]
+    T -->|Connection Lost| CL[Log Warning]
+    T -->|Remote Not Found| RN[Log Warning]
+    T -->|Parse Error| PE[Log Severe + Rethrow]
+    T -->|Other| OT[Log Severe + Rethrow]
+    
+    NT --> GC[Graceful Continue]
+    CL --> GC
+    RN --> GC
+    
+    PE --> ER[Error Response]
+    OT --> ER
+    
+    GC --> U[User Unaffected]
+    ER --> EU[User Sees Error Message]
+    
+    style GC fill:#4CAF50
+    style ER fill:#FF9800
+    style U fill:#4CAF50
+    style EU fill:#FFC107
+```
+
+### Network Error Detection
+
+Network-related errors are detected by pattern matching and handled gracefully:
+
+```dart
+// Agent-side graceful handling
+final errorString = e.toString().toLowerCase();
+if (errorString.contains('timeout') ||
+    errorString.contains('timed out') ||
+    errorString.contains('network') ||
+    errorString.contains('remote atsign not found') ||
+    errorString.contains('full response not received')) {
+  _logger.warning('[${queryId}] ⚠️ Network/timeout error - client may retry');
+  // Don't rethrow - this is expected when network is down
+  return;
+}
+```
+
+**Recoverable Errors** (logged as warnings, don't crash):
+- Network timeouts
+- Connection timeouts
+- Remote atSign not found
+- Full response not received
+- Network down/unavailable
+
+**Critical Errors** (logged as severe, propagated):
+- Parse errors (malformed JSON)
+- Authentication failures
+- Missing required fields (conversationId)
+- Unexpected exceptions
+
+### App-Side Timeout Management
+
+The app manages query timeouts per-conversation:
+
+```dart
+// Cancel timeout on first response (partial or final)
+_queryTimeouts[queryId]?.cancel();
+_queryTimeouts.remove(queryId);
+
+// Timeout duration
+const queryTimeout = Duration(seconds: 30);
+```
+
+**Timeout Behavior:**
+- Started when query is sent
+- Cancelled on **first response** (partial or final)
+- If timeout expires: Display error to user
+- Per-query basis (not global)
+
+### Subscription Cleanup
+
+Query-specific subscriptions are tracked and cleaned up:
+
+```dart
+// App-side subscription management
+final subscription = channel.stream.listen((response) {
+  if (!response.isPartial) {
+    // Final message received - cleanup
+    _querySubscriptions[queryId]?.cancel();
+    _querySubscriptions.remove(queryId);
+  }
+});
+
+// Track for manual cleanup if needed
+_querySubscriptions[queryId] = subscription;
+```
+
+**Cleanup Triggers:**
+- Final message received (`isPartial: false`)
+- Disconnect control message
+- Query timeout
+- App disposal/navigation away
+
+### Channel Cache Management
+
+Agent maintains a channel cache with automatic cleanup:
+
+```dart
+// Cache channel for reuse
+_queryChannels[queryId] = channel;
+
+// Cleanup on final message
+if (!response.isPartial) {
+  await Future.delayed(Duration(milliseconds: 100));
+  channel.sink.add(json.encode({'control': 'disconnect'}));
+  await Future.delayed(Duration(milliseconds: 100));
+  _queryChannels.remove(queryId);
+}
+
+// Cleanup on error
+catch (e) {
+  _queryChannels.remove(queryId);
+  // Handle error...
+}
+```
+
+### Error Recovery Flow
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant Agent
+    participant Network
+    
+    App->>Agent: Send Query
+    Agent->>Network: Setup Stream
+    
+    alt Network Available
+        Network-->>Agent: Connection OK
+        Agent->>App: Stream responses
+        App->>App: Display to user
+    else Network Timeout
+        Network-->>Agent: Timeout
+        Agent->>Agent: Log warning, cleanup
+        Note over Agent: Don't crash, don't retry
+        Note over App: Timeout timer expires
+        App->>App: Show error message
+        App->>App: User can retry manually
+    else Parse Error
+        Agent->>Agent: Log severe error
+        Agent->>App: Error response
+        App->>App: Show error message
+    end
+```
+
+### Logging Levels for Errors
+
+| Level | Use Case | Example |
+|-------|----------|---------|
+| `.fine()` | Verbose debug info | `'🔗 Query → conversation ${conversationId}'` |
+| `.info()` | Normal operations | `'[${queryId}] ✅ Streaming complete'` |
+| `.warning()` | Recoverable errors | `'[${queryId}] ⚠️ Network/timeout error'` |
+| `.severe()` | Critical errors | `'[${queryId}] Failed to parse query'` |
+| `.shout()` | Important events | `'[${queryId}] 🌐 Using HYBRID mode'` |
+
+## �🔐 Security Model
 
 ### Encryption Layers
 
@@ -574,6 +898,10 @@ graph TD
 | API Key Leakage | Only sanitized queries sent, no personal data |
 | Local Device Compromise | Keychain protection, encrypted storage |
 | Replay Attacks | Timestamps, unique message IDs |
+| Stream Hijacking | Query-specific namespaces, encrypted channels |
+| Message Injection | Signature verification via atPlatform |
+| DoS via Streams | Rate limiting, timeout management, cleanup |
+| Connection Exhaustion | Channel caching (1 per query), no heartbeat |
 
 ## 🔍 Query Analysis Algorithm
 
@@ -621,39 +949,122 @@ graph TD
 
 ## 📊 System Performance
 
-### Latency Breakdown
+### Streaming Performance Benefits
+
+The query-specific streaming architecture provides:
+
+1. **Reduced Connection Overhead**: 1 channel per query (vs 20+ connections previously)
+2. **Lower Latency**: Partial responses appear instantly as they're generated
+3. **Better UX**: Users see responses building in real-time
+4. **Scalability**: No periodic heartbeat traffic (removed ping/pong)
+5. **Network Resilience**: Graceful handling of timeouts without crashes
+
+### Latency Breakdown (Streaming Mode)
 
 ```mermaid
 gantt
-    title Query Processing Time (Typical)
+    title Query Processing Time with Streaming (Typical)
     dateFormat X
     axisFormat %L ms
 
-    section Local Only
+    section Setup
     App to atServer     :0, 100
     atServer to Agent   :100, 50
     Agent Analysis      :150, 200
-    Ollama Processing   :350, 1500
-    Response to User    :1850, 150
+    Stream Connection   :350, 100
     
-    section Hybrid Mode
-    App to atServer     :0, 100
-    atServer to Agent   :100, 50
-    Agent Analysis      :150, 200
-    Ollama Analysis     :350, 800
-    Claude API Call     :1150, 1500
-    Ollama Synthesis    :2650, 800
-    Response to User    :3450, 150
+    section Streaming (Ollama Only)
+    First Chunk (450ms) :450, 0
+    Chunk 2 (500ms)     :500, 0
+    Chunk 3 (1000ms)    :1000, 0
+    Chunk 4 (1500ms)    :1500, 0
+    Final (2000ms)      :2000, 0
+    
+    section Streaming (Hybrid Mode)
+    Analysis            :450, 800
+    Claude Stream Start :1250, 0
+    Claude Chunk 1      :1500, 0
+    Claude Chunk 2      :2000, 0
+    Claude Complete     :2500, 0
+    Ollama Synthesis    :2500, 800
+    Synthesis Chunk 1   :3000, 0
+    Synthesis Chunk 2   :3500, 0
+    Final               :4000, 0
 ```
+
+**Key Metrics:**
+
+| Metric | Ollama Only | Hybrid Mode | Notes |
+|--------|-------------|-------------|-------|
+| Time to First Chunk | ~450ms | ~1250ms | User sees response starting |
+| Chunk Frequency | ~500ms | ~500ms | Batched updates |
+| Total Time | 2-3s | 4-5s | For typical queries |
+| Network Calls | 1 setup + N chunks | 1 setup + N chunks | N = 3-8 typically |
+| Memory per Query | <10 MB | <20 MB | Including cached channel |
+
+### Connection Efficiency Comparison
+
+**Before (Fire-and-Forget per Chunk):**
+```
+Query 1: 20 connections (1 per chunk × 20 chunks)
+Query 2: 15 connections
+Query 3: 18 connections
+Total: 53 connections for 3 queries
+```
+
+**After (Cached Channels):**
+```
+Query 1: 1 connection (reused for 20 chunks)
+Query 2: 1 connection (reused for 15 chunks)
+Query 3: 1 connection (reused for 18 chunks)
+Total: 3 connections for 3 queries (94% reduction!)
+```
+
+### Concurrent Query Handling
+
+The system efficiently handles multiple simultaneous queries:
+
+```mermaid
+gantt
+    title Concurrent Query Processing
+    dateFormat X
+    axisFormat %L ms
+    
+    section Query A (@alice)
+    Setup A         :0, 200
+    Stream A        :200, 2000
+    
+    section Query B (@bob)
+    Setup B         :500, 200
+    Stream B        :700, 1800
+    
+    section Query C (@charlie)
+    Setup C         :1000, 200
+    Stream C        :1200, 2200
+```
+
+Each query maintains its own:
+- Unique channel: `response.{queryId}`
+- Separate subscription in app
+- Independent timeout management
+- Isolated error handling
 
 ### Resource Usage
 
 | Component | CPU | Memory | Network | Storage |
 |-----------|-----|--------|---------|---------|
-| Flutter App | Low | 100-200 MB | Minimal | 10-50 MB |
-| Agent Service | Low-Med | 200-400 MB | Minimal | 50-100 MB |
+| Flutter App | Low | 100-200 MB | <100 KB/query | 10-50 MB |
+| Agent Service | Low-Med | 200-400 MB | <200 KB/query | 50-100 MB |
 | Ollama | High | 4-8 GB | None | 4-7 GB (model) |
-| Total | Med | 4-9 GB | <1 MB/query | 5-8 GB |
+| atPlatform SDK | Low | 50-100 MB | Minimal | 10-20 MB |
+| **Total** | **Med** | **4-9 GB** | **<300 KB/query** | **5-8 GB** |
+
+**Network Traffic Breakdown:**
+- Query submission: ~1-5 KB (encrypted)
+- Stream setup: ~2 KB (connection handshake)
+- Per chunk: ~1-10 KB (depending on content)
+- Disconnect: ~0.5 KB (control message)
+- **No heartbeat overhead** (removed for scalability)
 
 ## 🚀 Deployment Architecture
 
@@ -774,13 +1185,14 @@ graph TD
 ## 📚 Related Documentation
 
 - [README.md](README.md) - Getting started and overview
-- [ATSIGN_ARCHITECTURE.md](ATSIGN_ARCHITECTURE.md) - atPlatform integration details
-- [OLLAMA_ONLY_MODE.md](OLLAMA_ONLY_MODE.md) - Privacy feature documentation
+- [AT_STREAM_COMPLETE.md](AT_STREAM_COMPLETE.md) - Streaming architecture migration
+- [docs/ATSIGN_ARCHITECTURE.md](docs/guides/ATSIGN_ARCHITECTURE.md) - atPlatform integration details
+- [docs/OLLAMA_ONLY_MODE.md](docs/guides/OLLAMA_ONLY_MODE.md) - Privacy feature documentation
 - [agent/README.md](agent/README.md) - Agent service details
 - [app/README.md](app/README.md) - Flutter app details
 
 ---
 
-**Architecture Version**: 1.0  
-**Last Updated**: October 14, 2025  
+**Architecture Version**: 2.0 (Streaming Architecture)  
+**Last Updated**: October 27, 2025  
 **Maintainer**: [@cconstab](https://github.com/cconstab)

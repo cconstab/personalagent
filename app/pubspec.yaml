@@ -13,7 +13,14 @@ dependencies:
 
   # atPlatform SDK
   at_client_mobile: ^3.2.0
-  at_onboarding_flutter: 6.1.7
+  at_onboarding_flutter: ^6.2.0
+  
+  # Streaming API (experimental - from feature branch)
+  at_stream:
+    git:
+      url: https://github.com/atsign-foundation/at_client_sdk.git
+      ref: at_stream-package
+      path: packages/at_stream
 
   # State management
   provider: ^6.1.1

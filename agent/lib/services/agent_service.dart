@@ -26,7 +26,7 @@ class AgentService {
 
   /// Initialize all services
   Future<void> initialize() async {
-    _logger.info('Initializing agent services');
+    _logger.fine('Initializing agent services');
 
     // Initialize atPlatform
     await atPlatform.initialize();
@@ -41,50 +41,71 @@ class AgentService {
     if (claude != null) {
       final claudeAvailable = await claude!.verifyApiKey();
       if (claudeAvailable) {
-        _logger.info('Claude API is available');
+        _logger.fine('Claude API is available');
       } else {
         _logger.warning('Claude API key is invalid or service unavailable');
       }
     }
 
-    _logger.info('Agent services initialized successfully');
+    _logger.fine('Agent services initialized successfully');
   }
 
   /// Start listening for incoming queries
   Future<void> startListening() async {
-    _logger.info('Starting to listen for queries');
+    _logger.fine('Starting to listen for queries');
+
+    // Start the at_stream response channel listener
+    _logger.fine('Starting at_stream response channel listener');
+    atPlatform.startResponseStreamListener();
+
+    // Start listening for query notifications
     await atPlatform.subscribeToMessages(_handleIncomingQuery);
-    _logger.info('Now listening for queries');
+    _logger.fine('Now listening for queries');
   }
 
   /// Handle incoming query from user
   Future<void> _handleIncomingQuery(QueryMessage query) async {
     try {
-      _logger.info('⚡ Handling query from ${query.userId}');
+      _logger.shout('[${query.id}] 📨 Query from ${query.userId}');
 
-      // Try to acquire mutex for this query - ensures only one agent responds
-      final mutexAcquired = await _tryAcquireQueryMutex(query);
-      if (!mutexAcquired) {
-        _logger.info(
-          '🤷‍♂️ Will not handle query ${query.id} - another agent instance will handle this',
+      // Warn if conversationId is missing - this should NEVER happen
+      if (query.conversationId == null || query.conversationId!.isEmpty) {
+        _logger.warning(
+          '[${query.id}] ⚠️ Query has NO conversationId! Response will be dropped by app!',
         );
-        return; // Another agent instance acquired the mutex, so we skip this query
+      } else {
+        _logger.fine(
+          '[${query.id}] 🔗 Query → conversation ${query.conversationId}',
+        );
       }
 
-      _logger.info(
+      // Try to acquire mutex for this query (only one agent responds)
+      final acquired = await _tryAcquireMutexWrapper(query.id);
+
+      if (!acquired) {
+        _logger.fine(
+          '🤷‍♂️ Another agent acquired the mutex for query ${query.id} - skipping',
+        );
+        return; // Another agent won the race
+      }
+
+      _logger.fine(
         '😎 Acquired mutex for query ${query.id} - this agent will respond',
       );
 
       // Process the query
       final response = await processQuery(query);
 
-      // Send response back to user
-      await atPlatform.sendResponse(query.userId, response);
+      // Connect to the query-specific response stream and send response
+      await atPlatform.sendStreamResponseToQuery(
+        query.userId,
+        query.id,
+        response,
+      );
 
-      _logger.info('✅ Sent response to ${query.userId}');
-      // Note: Mutex will auto-expire after 1 hour (TTL)
+      _logger.shout('[${query.id}] ✅ Replied to ${query.userId}');
     } catch (e, stackTrace) {
-      _logger.severe('Failed to handle query', e, stackTrace);
+      _logger.severe('[${query.id}] Failed to handle query', e, stackTrace);
 
       // Send error response
       try {
@@ -98,60 +119,28 @@ class AgentService {
           model: ollama.model,
           conversationId: query.conversationId, // Echo back conversation ID
         );
-        await atPlatform.sendResponse(query.userId, errorResponse);
+        await atPlatform.sendStreamResponseToQuery(
+          query.userId,
+          query.id,
+          errorResponse,
+        );
       } catch (sendError) {
-        _logger.severe('Failed to send error response', sendError);
-      }
-    }
-  }
-
-  /// Try to acquire a mutex for this query to ensure only one agent responds.
-  /// Returns true if this agent acquired the mutex (should handle the query),
-  /// false if another agent already acquired it (should skip the query).
-  ///
-  /// This implements the same pattern as sshnpd load balancing - using an
-  /// immutable AtKey that can only be created once. The first agent to create
-  /// it wins the mutex.
-  Future<bool> _tryAcquireQueryMutex(QueryMessage query) async {
-    // CRITICAL: Use notification ID as the mutex identifier
-    // All agents receive the same notification ID, ensuring they coordinate on the same mutex
-    final mutexId = query.notificationId ?? query.id;
-
-    try {
-      // Create mutex key: {notificationId}.query_mutexes.personalagent{agentAtSign}
-      final mutexAcquired = await atPlatform.tryAcquireMutex(
-        mutexId: mutexId,
-        ttlSeconds:
-            3600, // Expire after 1 hour - query TTL (5 min) prevents stale queries
-      );
-
-      if (mutexAcquired) {
-        _logger.info(
-          '😎 Acquired mutex for notification $mutexId (query ${query.id})',
+        _logger.severe(
+          '[${query.id}] Failed to send error response',
+          sendError,
         );
-        return true;
-      } else {
-        _logger.info(
-          '🤷‍♂️ Did not acquire mutex for notification $mutexId (another agent instance will handle this)',
-        );
-        return false;
       }
-    } catch (e) {
-      _logger.severe(
-        'Error acquiring mutex for $mutexId - will NOT respond to avoid duplicates: $e',
-      );
-      return false; // Do NOT respond if mutex acquisition fails - avoid duplicate responses
     }
   }
 
   /// Process a user query with privacy-preserving logic
   Future<ResponseMessage> processQuery(QueryMessage query) async {
     try {
-      _logger.info('Processing query: ${query.id}');
+      _logger.fine('Processing query: ${query.id}');
 
       // Check if user requested Ollama-only mode
       if (query.useOllamaOnly) {
-        _logger.info(
+        _logger.fine(
           '🔒 User requested Ollama-only mode - 100% private processing',
         );
         final context = await _retrieveContext(query);
@@ -167,7 +156,7 @@ class AgentService {
         userContext: context,
       );
 
-      _logger.info(
+      _logger.fine(
         'Analysis: canAnswerLocally=${analysis.canAnswerLocally}, '
         'confidence=${analysis.confidence.toStringAsFixed(2)}',
       );
@@ -176,13 +165,23 @@ class AgentService {
       if (analysis.canAnswerLocally &&
           analysis.confidence >= privacyThreshold) {
         // Process locally with Ollama (95% of queries)
+        _logger.info(
+          '[${query.id}] ✅ Using Ollama only (confidence: ${analysis.confidence.toStringAsFixed(2)})',
+        );
         return await _processWithOllama(query, context);
       } else {
         // Need external knowledge (5% of queries)
+        _logger.shout(
+          '[${query.id}] 🌐 Using HYBRID mode (Ollama + Claude) - external LLM required',
+        );
+        _logger.shout('[${query.id}]    Reason: ${analysis.reasoning}');
+        _logger.shout(
+          '[${query.id}]    Confidence: ${analysis.confidence.toStringAsFixed(2)} (threshold: $privacyThreshold)',
+        );
         return await _processWithHybrid(query, context, analysis);
       }
     } catch (e, stackTrace) {
-      _logger.severe('Failed to process query', e, stackTrace);
+      _logger.severe('[${query.id}] Failed to process query', e, stackTrace);
       return ResponseMessage(
         id: query.id,
         content:
@@ -216,18 +215,18 @@ class AgentService {
     QueryMessage query,
     String context,
   ) async {
-    _logger.info('Processing with Ollama only (fully private)');
-
-    // Agents are now stateless - conversation history comes from the app
+    _logger.fine(
+      '[${query.id}] Processing with Ollama only (fully private)',
+    ); // Agents are now stateless - conversation history comes from the app
     final hasHistory =
         query.conversationHistory != null &&
         query.conversationHistory!.isNotEmpty;
 
     if (hasHistory) {
-      _logger.info(
+      _logger.fine(
         '📝 Using conversation history from app (${query.conversationHistory!.length} messages)',
       );
-      _logger.info('🔍 History contents:');
+      _logger.fine('🔍 History contents:');
       for (var i = 0; i < query.conversationHistory!.length; i++) {
         final msg = query.conversationHistory![i];
         final role = msg['role'] ?? 'unknown';
@@ -235,10 +234,10 @@ class AgentService {
         final preview = content.length > 50
             ? '${content.substring(0, 50)}...'
             : content;
-        _logger.info('   [$i] $role: $preview');
+        _logger.fine('   [$i] $role: $preview');
       }
     } else {
-      _logger.info('🆕 Starting new conversation for ${query.userId}');
+      _logger.fine('🆕 Starting new conversation for ${query.userId}');
     }
 
     // Build system message with user's personal context (only on first message)
@@ -270,16 +269,16 @@ Respond naturally and conversationally.
       }
     }
 
-    _logger.info('📤 Final prompt being sent to Ollama:');
+    _logger.info('[${query.id}] 📤 Final prompt being sent to Ollama:');
     final promptPreview = promptBuffer.toString().length > 200
         ? '${promptBuffer.toString().substring(0, 200)}...'
         : promptBuffer.toString();
-    _logger.info('   $promptPreview');
+    _logger.info('[${query.id}]    $promptPreview');
 
     promptBuffer.write('User: ${query.content}');
 
     _logger.info(
-      '🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming',
+      '[${query.id}] 🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming',
     );
 
     // Stream the response and send incremental updates
@@ -304,11 +303,12 @@ Respond naturally and conversationally.
             .difference(lastSendTime)
             .inMilliseconds;
         final shouldSend =
-            chunk.done ||
             charsSinceLastSend >= minCharsBeforeSend ||
             timeSinceLastSend >= sendIntervalMs;
 
-        if (shouldSend) {
+        // Only send partial chunks during streaming, not the final one
+        // The final complete message will be sent after the loop
+        if (shouldSend && !chunk.done) {
           // Send partial response update
           final partialMessage = ResponseMessage(
             id: query.id,
@@ -319,27 +319,35 @@ Respond naturally and conversationally.
             agentName: agentName,
             model: ollama.model,
             conversationId: query.conversationId, // Echo back conversation ID
-            isPartial: !chunk.done,
+            isPartial: true,
             chunkIndex: chunkIndex++,
           );
 
           _logger.info(
-            '📤 Sending ${chunk.done ? 'FINAL' : 'PARTIAL'} chunk #$chunkIndex (${fullResponse.length} chars, isPartial: ${!chunk.done})',
+            '[${query.id}] 📤 Sending PARTIAL chunk #$chunkIndex (${fullResponse.length} chars)',
           );
 
-          // Fire-and-forget for better performance (don't await)
-          atPlatform.sendResponse(query.userId, partialMessage).catchError((e) {
-            _logger.warning('Failed to send streaming chunk: $e');
-          });
+          // Send chunk and await to ensure it completes
+          // This maintains channel caching and prevents errors
+          try {
+            await atPlatform.sendStreamResponseToQuery(
+              query.userId,
+              query.id,
+              partialMessage,
+            );
+          } catch (e) {
+            _logger.warning('[${query.id}] Failed to send streaming chunk: $e');
+            // Continue processing even if one chunk fails
+          }
 
           lastSendTime = DateTime.now();
           charsSinceLastSend = 0;
+        }
 
-          if (chunk.done) {
-            _logger.info(
-              '✅ Streaming complete. Sent ${chunkIndex} batched updates.',
-            );
-          }
+        if (chunk.done) {
+          _logger.info(
+            '[${query.id}] ✅ Streaming complete. Sent $chunkIndex batched updates. Final message will be sent separately.',
+          );
         }
       }
     }
@@ -365,11 +373,16 @@ Respond naturally and conversationally.
     AnalysisResult analysis,
   ) async {
     if (claude == null) {
-      _logger.warning('Claude not available, falling back to Ollama only');
+      _logger.warning(
+        '[${query.id}] ⚠️ Claude not available, falling back to Ollama only',
+      );
       return await _processWithOllama(query, context);
     }
 
-    _logger.info('Processing with hybrid approach (Ollama + Claude)');
+    _logger.shout(
+      '[${query.id}] 🌐 HYBRID MODE: Using Claude for external knowledge',
+    );
+    _logger.info('[${query.id}]    Analysis: ${analysis.reasoning}');
 
     // Agents are now stateless - use conversation history from app
     final hasHistory =
@@ -386,7 +399,7 @@ Respond naturally and conversationally.
           : query.conversationHistory!;
 
       _logger.info(
-        'Including ${recentHistory.length} recent messages for Claude context',
+        '[${query.id}] Including ${recentHistory.length} recent messages for Claude context',
       );
       for (final msg in recentHistory) {
         final role = msg['role'] == 'user' ? 'User' : 'Assistant';
@@ -396,26 +409,31 @@ Respond naturally and conversationally.
 
     // Step 1: Sanitize the query (remove personal information)
     final sanitizedQuery = await ollama.sanitizeQuery(query.content, context);
-    _logger.info('Sanitized query: $sanitizedQuery');
+    _logger.info('[${query.id}] Sanitized query: $sanitizedQuery');
 
     // Step 2: Get general knowledge from Claude with streaming (include recent conversation context)
     final claudePrompt = conversationContext.isNotEmpty
         ? 'Recent conversation:\n$conversationContext\nUser: $sanitizedQuery'
         : sanitizedQuery;
 
-    _logger.info('🌐 Streaming response from Claude...');
+    _logger.info('[${query.id}] 🌐 Streaming response from Claude...');
     final StringBuffer claudeFullResponse = StringBuffer();
     await for (final chunk in claude!.queryStream(
       sanitizedQuery: claudePrompt,
     )) {
       claudeFullResponse.write(chunk.content);
       if (chunk.done) {
-        _logger.info('✅ Claude streaming complete');
+        _logger.info('[${query.id}] ✅ Claude streaming complete');
       }
     }
 
     final claudeResponseContent = claudeFullResponse.toString();
-    _logger.info('Received complete response from Claude');
+    _logger.shout(
+      '[${query.id}] ✅ Received ${claudeResponseContent.length} characters from Claude',
+    );
+    _logger.info(
+      '[${query.id}]    Now synthesizing with Ollama for personalization...',
+    );
 
     // Step 3: Combine Claude's knowledge with user context using Ollama with streaming
     // Build full prompt including conversation history
@@ -448,7 +466,9 @@ $claudeResponseContent
     promptBuffer.write('User: ${query.content}');
 
     // Stream Ollama's final synthesis with batching
-    _logger.info('🤖 Synthesizing final response with Ollama streaming...');
+    _logger.info(
+      '[${query.id}] 🤖 Synthesizing final response with Ollama streaming...',
+    );
     final StringBuffer fullResponse = StringBuffer();
     int chunkIndex = 0;
     DateTime lastSendTime = DateTime.now();
@@ -468,11 +488,12 @@ $claudeResponseContent
             .difference(lastSendTime)
             .inMilliseconds;
         final shouldSend =
-            chunk.done ||
             charsSinceLastSend >= minCharsBeforeSend ||
             timeSinceLastSend >= sendIntervalMs;
 
-        if (shouldSend) {
+        // Only send partial chunks during streaming, not the final one
+        // The final complete message will be sent after the loop
+        if (shouldSend && !chunk.done) {
           // Send partial response update
           final partialMessage = ResponseMessage(
             id: query.id,
@@ -483,28 +504,43 @@ $claudeResponseContent
             agentName: agentName,
             model: '${ollama.model} + ${claude!.model}',
             conversationId: query.conversationId, // Echo back conversation ID
-            isPartial: !chunk.done,
+            isPartial: true,
             chunkIndex: chunkIndex++,
           );
 
-          // Fire-and-forget for better performance (don't await)
-          atPlatform.sendResponse(query.userId, partialMessage).catchError((e) {
-            _logger.warning('Failed to send streaming chunk: $e');
-          });
+          // Send chunk and await to ensure it completes
+          // This maintains channel caching and prevents errors
+          try {
+            await atPlatform.sendStreamResponseToQuery(
+              query.userId,
+              query.id,
+              partialMessage,
+            );
+          } catch (e) {
+            _logger.warning('[${query.id}] Failed to send streaming chunk: $e');
+            // Continue processing even if one chunk fails
+          }
 
           lastSendTime = DateTime.now();
           charsSinceLastSend = 0;
+        }
 
-          if (chunk.done) {
-            _logger.info(
-              '✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates.',
-            );
-          }
+        if (chunk.done) {
+          _logger.info(
+            '[${query.id}] ✅ Hybrid streaming complete. Sent ${chunkIndex} batched updates. Final message will be sent separately.',
+          );
         }
       }
     }
 
     // Return final complete message
+    _logger.shout(
+      '[${query.id}] ✅ HYBRID processing complete: Claude + Ollama synthesis',
+    );
+    _logger.info(
+      '[${query.id}]    Final response length: ${fullResponse.length} characters',
+    );
+
     return ResponseMessage(
       id: query.id,
       content: fullResponse.toString(),
@@ -538,5 +574,10 @@ $claudeResponseContent
     await atPlatform.dispose();
     ollama.dispose();
     claude?.dispose();
+  }
+
+  /// Wrapper to work around type inference issues
+  Future<bool> _tryAcquireMutexWrapper(dynamic queryId) async {
+    return await atPlatform.acquireQueryMutex(queryId, agentName!);
   }
 }

@@ -47,26 +47,31 @@ class _HomeScreenState extends State<HomeScreen> {
       final agentProvider = context.read<AgentProvider>();
 
       if (authProvider.atSign != null) {
-        debugPrint('🔄 Initializing AtClient for ${authProvider.atSign}');
-
-        // Note: Don't clear messages here - causes setState during build
-        // Messages will be loaded from atPlatform anyway
-
         // Use the SDK's onboarding to authenticate with keychain keys
         await _authenticateWithKeychain(authProvider.atSign!);
 
         final atClientService = app_service.AtClientService();
         await atClientService.initialize(authProvider.atSign!);
 
-        // Set agent @sign if not already set
-        if (agentProvider.agentAtSign == null) {
-          agentProvider.setAgentAtSign('@llama');
+        // Load saved agent atSign from atPlatform (after AtClient is ready)
+        await authProvider.loadSavedAgentAtSign();
+
+        // Set agent atSign from AuthProvider (loaded from atPlatform)
+        // or use default if not set
+        final agentAtSignToUse = authProvider.agentAtSign ?? '@llama';
+
+        // Set in both providers
+        if (agentProvider.agentAtSign == null || agentProvider.agentAtSign != agentAtSignToUse) {
+          agentProvider.setAgentAtSign(agentAtSignToUse);
         }
 
-        debugPrint('✅ AtClient initialized successfully');
+        // Set in AtClientService (required for stream)
+        atClientService.setAgentAtSign(agentAtSignToUse);
+
+        // Establish stream connection (required for stream-only mode)
+        await atClientService.startResponseStreamConnection();
 
         // Now that AtClient is ready, reload conversations from atPlatform
-        debugPrint('🔄 Reloading conversations now that AtClient is ready...');
         await agentProvider.reloadConversations();
       }
     } catch (e) {
@@ -101,8 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // Check if we need to switch @signs (like NoPorts does)
     try {
-      final currentAtSign =
-          AtClientManager.getInstance().atClient.getCurrentAtSign();
+      final currentAtSign = AtClientManager.getInstance().atClient.getCurrentAtSign();
       if (currentAtSign != null && currentAtSign != atSign) {
         debugPrint('🔄 Switching from $currentAtSign to $atSign');
         // Tell SDK to switch primary @sign
@@ -134,8 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
       throw Exception('Authentication failed: ${result.message}');
     }
 
-    debugPrint(
-        '✅ Authenticated successfully with keychain as ${result.atsign}');
+    debugPrint('✅ Authenticated successfully with keychain as ${result.atsign}');
   }
 
   void _scrollToBottom() {
@@ -166,8 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  void _showDeleteCurrentConversationDialog(
-      BuildContext context, AgentProvider agent) {
+  void _showDeleteCurrentConversationDialog(BuildContext context, AgentProvider agent) {
     final conversation = agent.currentConversation;
     if (conversation == null) return;
 
@@ -246,8 +248,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (context) => const ConversationsScreen()),
+                MaterialPageRoute(builder: (context) => const ConversationsScreen()),
               );
             },
           ),
@@ -308,22 +309,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 16),
                         Text(
                           'Start a conversation',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.5),
-                                  ),
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withOpacity(0.5),
+                              ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Ask me anything. I\'ll keep your data private.',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface.withOpacity(0.3),
-                                  ),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withOpacity(0.3),
+                              ),
                         ),
                       ],
                     ),
@@ -373,8 +372,7 @@ class _PersistentInputField extends StatefulWidget {
   State<_PersistentInputField> createState() => _PersistentInputFieldState();
 }
 
-class _PersistentInputFieldState extends State<_PersistentInputField>
-    with AutomaticKeepAliveClientMixin {
+class _PersistentInputFieldState extends State<_PersistentInputField> with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 

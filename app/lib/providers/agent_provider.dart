@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message.dart';
@@ -24,10 +25,59 @@ class AgentProvider extends ChangeNotifier {
   final List<ChatMessage> _pendingMessages = [];
   bool _conversationsLoaded = false;
 
+  /// Query timeout tracking
+  final Map<String, Timer> _queryTimeouts = {};
+  static const Duration _queryTimeout = Duration(seconds: 60);
+
   /// Safely notify listeners immediately
   void _safeNotifyListeners() {
     if (!hasListeners) return;
     notifyListeners();
+  }
+
+  /// Start a timeout for a query - shows error if no response received
+  void _startQueryTimeout(String queryId, String conversationId) {
+    // Cancel any existing timeout for this query
+    _queryTimeouts[queryId]?.cancel();
+
+    // Start new timeout
+    _queryTimeouts[queryId] = Timer(_queryTimeout, () {
+      debugPrint(
+          '⏰ Query $queryId timed out after ${_queryTimeout.inSeconds}s');
+
+      // Find the conversation
+      final conversation =
+          _conversations.where((c) => c.id == conversationId).firstOrNull;
+      if (conversation == null) return;
+
+      // Remove the thinking placeholder
+      final thinkingPlaceholderId = '${queryId}_thinking';
+      conversation.messages.removeWhere((m) => m.id == thinkingPlaceholderId);
+
+      // Add timeout error message
+      final errorMessage = ChatMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        content:
+            'Request timed out. The agent may be offline or unresponsive. The app will automatically reconnect when an agent is available.',
+        isUser: false,
+        timestamp: DateTime.now(),
+        isError: true,
+      );
+      conversation.messages.add(errorMessage);
+
+      // Clean up
+      _queryTimeouts.remove(queryId);
+      _queryToConversationMap.remove(queryId);
+      _isProcessing = false;
+
+      _safeNotifyListeners();
+    });
+  }
+
+  /// Cancel query timeout when response is received
+  void _cancelQueryTimeout(String queryId) {
+    _queryTimeouts[queryId]?.cancel();
+    _queryTimeouts.remove(queryId);
   }
 
   List<Conversation> get conversations => List.unmodifiable(_conversations);
@@ -112,6 +162,9 @@ class AgentProvider extends ChangeNotifier {
       }
 
       // Check if this is a streaming update (partial message)
+      // Cancel the query timeout since we received ANY response (partial or final)
+      _cancelQueryTimeout(message.id);
+
       if (message.isPartial) {
         // Find existing AGENT message (not user message) with this ID and update it
         final existingIndex = conversation.messages
@@ -539,7 +592,7 @@ class AgentProvider extends ChangeNotifier {
 
     debugPrint('📤 Attempting to send message...');
     debugPrint('   AtClient initialized: ${_atClientService.isInitialized}');
-    debugPrint('   Agent @sign: $_agentAtSign');
+    debugPrint('   Agent atSign: $_agentAtSign');
     debugPrint('   Conversation: ${currentConversation!.id}');
 
     // Check if AtClient is initialized
@@ -557,13 +610,13 @@ class AgentProvider extends ChangeNotifier {
       return;
     }
 
-    // Check if agent @sign is configured
+    // Check if agent atSign is configured
     if (_agentAtSign == null) {
-      debugPrint('❌ Agent @sign not configured!');
+      debugPrint('❌ Agent atSign not configured!');
       final errorMessage = ChatMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         content:
-            'Error: Agent @sign not configured. Please set it in Settings.',
+            'Error: Agent atSign not configured. Please set it in Settings.',
         isUser: false,
         timestamp: DateTime.now(),
         isError: true,
@@ -624,7 +677,7 @@ class AgentProvider extends ChangeNotifier {
           '📝 Including ${conversationHistory.length} previous messages for context');
 
       // Send message to agent via atPlatform with conversation context and ID
-      await _atClientService.sendQuery(
+      await _atClientService.sendMessage(
         userMessage,
         useOllamaOnly: _useOllamaOnly,
         conversationHistory: conversationHistory,
@@ -638,6 +691,9 @@ class AgentProvider extends ChangeNotifier {
         conversationIdForThisQuery,
       );
       debugPrint('💾 Persisted query mapping to atPlatform');
+
+      // Start timeout timer for this query
+      _startQueryTimeout(userMessage.id, conversationIdForThisQuery);
 
       // Response will be received via messageStream listener
       // and added to messages automatically

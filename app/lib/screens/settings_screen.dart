@@ -30,20 +30,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Configure Agent @sign'),
+        title: const Text('Configure Agent atSign'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Enter the @sign of your agent backend:',
+              'Enter the atSign of your agent backend:',
               style: TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
               decoration: const InputDecoration(
-                labelText: 'Agent @sign',
+                labelText: 'Agent atSign',
                 hintText: '@llama',
                 prefixIcon: Icon(Icons.alternate_email),
                 border: OutlineInputBorder(),
@@ -52,7 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Make sure your agent is running with this @sign.',
+              'Make sure your agent is running with this atSign.',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -63,25 +63,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               final atSign = controller.text.trim();
               if (atSign.isNotEmpty) {
                 // Add @ prefix if missing
-                final formattedAtSign =
-                    atSign.startsWith('@') ? atSign : '@$atSign';
-                context.read<AgentProvider>().setAgentAtSign(formattedAtSign);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Agent @sign set to $formattedAtSign'),
-                    behavior: SnackBarBehavior.floating,
-                    margin: EdgeInsets.only(
-                      bottom: MediaQuery.of(context).size.height - 100,
-                      left: 10,
-                      right: 10,
-                    ),
-                  ),
-                );
+                final formattedAtSign = atSign.startsWith('@') ? atSign : '@$atSign';
+
+                // Save to atPlatform via AuthProvider
+                try {
+                  await context.read<AuthProvider>().saveAgentAtSign(formattedAtSign);
+                  context.read<AgentProvider>().setAgentAtSign(formattedAtSign);
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Agent atSign set to $formattedAtSign'),
+                        behavior: SnackBarBehavior.floating,
+                        margin: EdgeInsets.only(
+                          bottom: MediaQuery.of(context).size.height - 100,
+                          left: 10,
+                          right: 10,
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to save agent atSign: $e'),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
               }
             },
             child: const Text('Save'),
@@ -92,7 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showSwitchAtSignDialog() async {
-    // Get list of @signs from keychain
+    // Get list of atSigns from keychain
     final atSigns = await KeychainUtil.getAtsignList() ?? [];
 
     if (!mounted) return;
@@ -100,7 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (atSigns.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('No @signs found in keychain'),
+          content: const Text('No atSigns found in keychain'),
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.only(
             bottom: MediaQuery.of(context).size.height - 100,
@@ -117,13 +134,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Switch @sign'),
+        title: const Text('Switch atSign'),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Select an @sign to switch to:'),
+              const Text('Select an atSign to switch to:'),
               const SizedBox(height: 16),
               ListView.builder(
                 shrinkWrap: true,
@@ -134,15 +151,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   return ListTile(
                     leading: Icon(
                       Icons.account_circle,
-                      color: isCurrent
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color: isCurrent ? Theme.of(context).colorScheme.primary : null,
                     ),
                     title: Text(
                       atSign,
                       style: TextStyle(
-                        fontWeight:
-                            isCurrent ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     subtitle: isCurrent ? const Text('Current') : null,
@@ -216,16 +230,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // NOTE: We do NOT call clearMessages() here because it would save an empty
       // conversation to atPlatform, destroying the conversation data!
-      // The conversations will be reloaded for the new @sign automatically.
+      // The conversations will be reloaded for the new atSign automatically.
 
       // Use AtOnboarding.changePrimaryAtsign to switch (like NoPorts)
       debugPrint('Calling changePrimaryAtsign...');
       bool switched = await AtOnboarding.changePrimaryAtsign(atsign: atSign);
       if (!switched) {
-        throw Exception('Failed to change primary @sign to $atSign');
+        throw Exception('Failed to change primary atSign to $atSign');
       }
 
-      // Now onboard with the new @sign
+      // Now onboard with the new atSign
       final dir = await getApplicationSupportDirectory();
       final atClientPreference = AtClientPreference()
         ..rootDomain = 'root.atsign.org'
@@ -250,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Update auth provider
           await context.read<AuthProvider>().authenticate(atSign);
 
-          // CRITICAL: Reload conversations for the new @sign
+          // CRITICAL: Reload conversations for the new atSign
           // Without this, the UI shows empty even though conversations exist
           if (mounted) {
             await context.read<AgentProvider>().reloadConversations();
@@ -277,11 +291,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Error switching @sign: $e');
+      debugPrint('Error switching atSign: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to switch @sign: $e'),
+            content: Text('Failed to switch atSign: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
@@ -297,7 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showManageAtSignsDialog() async {
-    // Get list of @signs from keychain
+    // Get list of atSigns from keychain
     final atSigns = await KeychainUtil.getAtsignList() ?? [];
 
     if (!mounted) return;
@@ -305,7 +319,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (atSigns.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('No @signs found in keychain'),
+          content: const Text('No atSigns found in keychain'),
           behavior: SnackBarBehavior.floating,
           margin: EdgeInsets.only(
             bottom: MediaQuery.of(context).size.height - 100,
@@ -320,33 +334,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Manage @signs'),
+        title: const Text('Manage atSigns'),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('@signs stored in your keychain:'),
+              const Text('atSigns stored in your keychain:'),
               const SizedBox(height: 16),
               ListView.builder(
                 shrinkWrap: true,
                 itemCount: atSigns.length,
                 itemBuilder: (context, index) {
                   final atSign = atSigns[index];
-                  final isCurrent =
-                      atSign == this.context.read<AuthProvider>().atSign;
+                  final isCurrent = atSign == this.context.read<AuthProvider>().atSign;
                   return ListTile(
                     leading: Icon(
                       Icons.account_circle,
-                      color: isCurrent
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color: isCurrent ? Theme.of(context).colorScheme.primary : null,
                     ),
                     title: Text(
                       atSign,
                       style: TextStyle(
-                        fontWeight:
-                            isCurrent ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     subtitle: isCurrent ? const Text('Current') : null,
@@ -380,7 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove @sign?'),
+        title: const Text('Remove atSign?'),
         content: Text(
           'Remove $atSign from the keychain?\n\nThis will delete the keys permanently. Make sure you have a backup of your .atKeys file.',
         ),
@@ -436,14 +446,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           throw Exception('Failed to remove from keychain: ${result.stderr}');
         }
       } else {
-        throw Exception('Remove @sign not yet supported on this platform');
+        throw Exception('Remove atSign not yet supported on this platform');
       }
     } catch (e) {
-      debugPrint('Error removing @sign: $e');
+      debugPrint('Error removing atSign: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to remove @sign: $e'),
+            content: Text('Failed to remove atSign: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
             margin: EdgeInsets.only(
@@ -468,7 +478,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, auth, _) {
               return ListTile(
                 leading: const Icon(Icons.account_circle),
-                title: const Text('Current @sign'),
+                title: const Text('Current atSign'),
                 subtitle: Text(auth.atSign ?? 'Not signed in'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showSwitchAtSignDialog(),
@@ -479,7 +489,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, agent, _) {
               return ListTile(
                 leading: const Icon(Icons.smart_toy),
-                title: const Text('Agent @sign'),
+                title: const Text('Agent atSign'),
                 subtitle: Text(agent.agentAtSign ?? 'Not configured'),
                 trailing: const Icon(Icons.edit),
                 onTap: () => _showAgentAtSignDialog(context),
@@ -549,8 +559,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.manage_accounts),
-            title: const Text('Manage @signs'),
-            subtitle: const Text('View and remove stored @signs'),
+            title: const Text('Manage atSigns'),
+            subtitle: const Text('View and remove stored atSigns'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showManageAtSignsDialog(),
           ),
@@ -617,8 +627,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('View source code on GitHub'),
             trailing: const Icon(Icons.open_in_new),
             onTap: () async {
-              final url =
-                  Uri.parse('https://github.com/cconstab/personalagent');
+              final url = Uri.parse('https://github.com/cconstab/personalagent');
               if (await canLaunchUrl(url)) {
                 await launchUrl(url, mode: LaunchMode.externalApplication);
               } else {
@@ -655,8 +664,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           await context.read<AuthProvider>().signOut();
                           if (context.mounted) {
                             // Pop all routes to return to the front screen (onboarding)
-                            Navigator.of(context)
-                                .popUntil((route) => route.isFirst);
+                            Navigator.of(context).popUntil((route) => route.isFirst);
                           }
                         },
                         child: const Text('Sign Out'),
