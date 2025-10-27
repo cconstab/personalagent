@@ -27,6 +27,12 @@ class AtClientService {
   int _reconnectAttempts = 0;
   Timer? _reconnectTimer;
 
+  // Heartbeat state
+  Timer? _heartbeatTimer;
+  Timer? _pongTimeoutTimer;
+  static const Duration _heartbeatInterval = Duration(seconds: 10);
+  static const Duration _pongTimeout = Duration(seconds: 5);
+
   bool get isInitialized => _atClient != null;
   String? get currentAtSign => _currentAtSign;
   String? get agentAtSign => _agentAtSign;
@@ -47,7 +53,8 @@ class AtClientService {
 
       // Check if SDK is using wrong @sign
       if (currentAtSign != null && currentAtSign != atSign) {
-        throw Exception('SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
+        throw Exception(
+            'SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
       }
 
       if (currentAtSign != null) {
@@ -55,7 +62,8 @@ class AtClientService {
         _atClient = manager.atClient;
       } else {
         // This shouldn't happen after successful onboarding
-        throw Exception('AtClient not initialized. Onboarding may not have completed successfully.');
+        throw Exception(
+            'AtClient not initialized. Onboarding may not have completed successfully.');
       }
     } catch (e, stackTrace) {
       debugPrint('❌ Failed to initialize AtClientService: $e');
@@ -85,6 +93,67 @@ class AtClientService {
     }
 
     try {
+      // Create a unique response channel for THIS query only
+      // This ensures we only get responses for this specific query
+      final queryId = message.id;
+      debugPrint('📡 Setting up response stream listener for query $queryId');
+
+      // Start listening for agent connections on this query-specific namespace
+      final bindStream = AtNotificationStreamChannel.bind<String, String>(
+        _atClient!,
+        baseNamespace: 'personalagent',
+        domainNamespace: 'response.$queryId', // Unique namespace per query
+        sendTransformer: QuerySendTransformer(),
+        recvTransformer: MessageReceiveTransformer(),
+      );
+
+      // Set up the listener for when agent connects
+      bindStream.listen((responseChannel) {
+        debugPrint('🔗 Agent connected to response stream for query $queryId');
+
+        // Listen for agent's responses on this channel
+        responseChannel.stream.listen(
+          (String responseJson) {
+            try {
+              final responseData =
+                  json.decode(responseJson) as Map<String, dynamic>;
+
+              final responseMessage = ChatMessage(
+                id: responseData['id'] ??
+                    DateTime.now().millisecondsSinceEpoch.toString(),
+                content: responseData['content'] ?? '',
+                isUser: false,
+                timestamp: DateTime.parse(
+                  responseData['timestamp'] ?? DateTime.now().toIso8601String(),
+                ),
+                source: _parseSource(responseData['source']),
+                wasPrivacyFiltered: responseData['wasPrivacyFiltered'] ?? false,
+                agentName: responseData['agentName'] as String?,
+                model: responseData['model'] as String?,
+                isPartial: responseData['metadata']?['isPartial'] ?? false,
+                chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
+                conversationId:
+                    responseData['metadata']?['conversationId'] as String?,
+              );
+
+              _messageController.add(responseMessage);
+            } catch (e, stackTrace) {
+              debugPrint('❌ Failed to parse response: $e');
+              debugPrint('StackTrace: $stackTrace');
+            }
+          },
+          onDone: () {
+            debugPrint('✅ Response stream closed for query $queryId');
+          },
+          onError: (error) {
+            debugPrint('❌ Response stream error for query $queryId: $error');
+          },
+        );
+      });
+
+      debugPrint(
+          '✅ Response channel bound for query $queryId, ready for agent connection');
+
       // Build conversation context from history
       final List<Map<String, dynamic>> context = [];
       if (conversationHistory != null && conversationHistory.isNotEmpty) {
@@ -106,7 +175,9 @@ class AtClientService {
         'timestamp': message.timestamp.toIso8601String(),
         'useOllamaOnly': useOllamaOnly,
         'conversationHistory': context, // Include conversation context
-        if (conversationId != null) 'conversationId': conversationId, // Include conversation ID for response routing
+        if (conversationId != null)
+          'conversationId':
+              conversationId, // Include conversation ID for response routing
       };
 
       // Send as notification with same pattern as at_talk
@@ -114,7 +185,8 @@ class AtClientService {
         ..isPublic = false
         ..isEncrypted = true
         ..namespaceAware = true
-        ..ttl = 300000; // 5 minutes (300 seconds) - queries expire if agent offline
+        ..ttl =
+            300000; // 5 minutes (300 seconds) - queries expire if agent offline
 
       final atKey = AtKey()
         ..key = 'query'
@@ -131,6 +203,9 @@ class AtClientService {
         checkForFinalDeliveryStatus: false,
         waitForFinalDeliveryStatus: false,
       );
+
+      debugPrint(
+          '📤 Query notification sent, agent will connect to response.$queryId stream');
     } catch (e, stackTrace) {
       debugPrint('Failed to send query: $e');
       debugPrint('StackTrace: $stackTrace');
@@ -168,7 +243,8 @@ class AtClientService {
       }
 
       // Connect to agent's stream channel
-      _responseStreamChannel = await AtNotificationStreamChannel.connect<String, String>(
+      _responseStreamChannel =
+          await AtNotificationStreamChannel.connect<String, String>(
         _atClient!,
         otherAtsign: _agentAtSign!,
         baseNamespace: 'personalagent',
@@ -201,11 +277,20 @@ class AtClientService {
         (String responseJson) {
           try {
             // Parse JSON response
-            final responseData = json.decode(responseJson) as Map<String, dynamic>;
+            final responseData =
+                json.decode(responseJson) as Map<String, dynamic>;
+
+            // Check if this is a pong response
+            if (responseData['type'] == 'pong') {
+              debugPrint('🏓 Received pong from $_agentAtSign');
+              _pongTimeoutTimer?.cancel(); // Cancel timeout - agent is alive
+              return;
+            }
 
             // Convert response data to ChatMessage
             final message = ChatMessage(
-              id: responseData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              id: responseData['id'] ??
+                  DateTime.now().millisecondsSinceEpoch.toString(),
               content: responseData['content'] ?? '',
               isUser: false,
               timestamp: DateTime.parse(
@@ -217,7 +302,8 @@ class AtClientService {
               model: responseData['model'] as String?,
               isPartial: responseData['metadata']?['isPartial'] ?? false,
               chunkIndex: responseData['metadata']?['chunkIndex'] as int?,
-              conversationId: responseData['metadata']?['conversationId'] as String?,
+              conversationId:
+                  responseData['metadata']?['conversationId'] as String?,
             );
 
             // Emit the message to listeners
@@ -241,16 +327,21 @@ class AtClientService {
         onError: (error) {
           debugPrint('❌ Response stream error: $error');
 
-          // Attempt to reconnect on error
+          // Stop heartbeat and attempt to reconnect on error
+          _stopHeartbeat();
           _scheduleReconnect();
         },
         onDone: () {
           debugPrint('🔌 Stream connection closed');
 
-          // Attempt to reconnect when stream closes
+          // Stop heartbeat and attempt to reconnect when stream closes
+          _stopHeartbeat();
           _scheduleReconnect();
         },
       );
+
+      // Start periodic heartbeat to detect stale connections
+      _startHeartbeat();
 
       // Note: We don't close the channel here - it stays open for the session
       // The channel will be closed when the app resets or disposes
@@ -278,7 +369,8 @@ class AtClientService {
           : 30, // Cap at 30 seconds
     );
 
-    debugPrint('🔄 Scheduling reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
+    debugPrint(
+        '🔄 Scheduling reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
 
     _reconnectTimer = Timer(delay, () {
       _connectToStreamWithRetry();
@@ -294,7 +386,8 @@ class AtClientService {
 
   /// Save a short-lived mapping from queryId -> conversationId to atPlatform
   /// This helps recover routing after app restarts or provider re-creation
-  Future<void> saveQueryMapping(String queryId, String conversationId, {int ttlMilliseconds = 3600000}) async {
+  Future<void> saveQueryMapping(String queryId, String conversationId,
+      {int ttlMilliseconds = 3600000}) async {
     if (_atClient == null) {
       // Can't save yet
       return;
@@ -439,6 +532,59 @@ class AtClientService {
   /// Cleanup resources
   void dispose() {
     stopReconnect();
+    _stopHeartbeat();
     _messageController.close();
+  }
+
+  /// Start periodic heartbeat to detect stale connections
+  void _startHeartbeat() {
+    _stopHeartbeat(); // Clear any existing heartbeat
+
+    debugPrint(
+        '💓 Starting heartbeat (${_heartbeatInterval.inSeconds}s interval)');
+
+    _heartbeatTimer = Timer.periodic(_heartbeatInterval, (_) {
+      _sendHeartbeat();
+    });
+  }
+
+  /// Stop heartbeat timers
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _pongTimeoutTimer?.cancel();
+    _pongTimeoutTimer = null;
+  }
+
+  /// Send heartbeat ping to agent
+  void _sendHeartbeat() {
+    if (_responseStreamChannel == null) {
+      debugPrint('⚠️ Cannot send heartbeat - no stream channel');
+      return;
+    }
+
+    try {
+      debugPrint('💓 Sending heartbeat ping');
+
+      // Send ping
+      _responseStreamChannel!.sink.add(json.encode({
+        'type': 'ping',
+        'from': _currentAtSign,
+        'timestamp': DateTime.now().toIso8601String(),
+      }));
+
+      // Start timeout timer - if no pong received, reconnect
+      _pongTimeoutTimer?.cancel();
+      _pongTimeoutTimer = Timer(_pongTimeout, () {
+        debugPrint('💔 Heartbeat timeout - no pong received, reconnecting...');
+        _stopHeartbeat();
+        _scheduleReconnect();
+      });
+    } catch (e) {
+      debugPrint('⚠️ Failed to send heartbeat: $e');
+      // Connection is stale, reconnect
+      _stopHeartbeat();
+      _scheduleReconnect();
+    }
   }
 }

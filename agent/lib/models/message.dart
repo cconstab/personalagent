@@ -42,6 +42,8 @@ class QueryMessage extends AgentMessage {
   final List<Map<String, dynamic>>? conversationHistory;
   final String?
   conversationId; // For routing responses back to correct conversation
+  final String?
+  streamSessionId; // Stream session ID from app for response routing
 
   /// The notification ID from atPlatform - used for mutex coordination
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -55,6 +57,7 @@ class QueryMessage extends AgentMessage {
     this.useOllamaOnly = false,
     this.conversationHistory,
     this.conversationId,
+    this.streamSessionId,
     this.notificationId,
     DateTime? timestamp,
   }) : super(

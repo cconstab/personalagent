@@ -20,7 +20,8 @@ class AtPlatformService {
   bool _isInitialized = false;
 
   // Store active stream channels for each connected user
-  final Map<String, AtNotificationStreamChannel<String, String>> _activeChannels = {};
+  final Map<String, AtNotificationStreamChannel<String, String>>
+  _activeChannels = {};
 
   AtPlatformService({
     required this.atSign,
@@ -83,7 +84,9 @@ class AtPlatformService {
       // CRITICAL: Set fetchOfflineNotifications to false to ignore old notifications
       // This prevents processing stale queries that accumulated while agent was offline
       _atClient!.getPreferences()!.fetchOfflineNotifications = false;
-      _logger.fine('📅 Configured to fetch ONLY new notifications (ignore offline backlog)');
+      _logger.fine(
+        '📅 Configured to fetch ONLY new notifications (ignore offline backlog)',
+      );
 
       _isInitialized = true;
 
@@ -170,19 +173,26 @@ class AtPlatformService {
   }
 
   /// Subscribe to incoming messages from Flutter app
-  Future<void> subscribeToMessages(Future<void> Function(QueryMessage) onQueryReceived) async {
+  Future<void> subscribeToMessages(
+    Future<void> Function(QueryMessage) onQueryReceived,
+  ) async {
     _ensureInitialized();
 
     _logger.fine('🔔 Setting up notification listener');
     _logger.fine('   AtClient: ${_atClient != null ? "initialized" : "NULL"}');
-    _logger.fine('   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}');
+    _logger.fine(
+      '   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}',
+    );
 
     try {
       // Subscribe with same pattern as at_talk - this makes auto-decryption work!
       _logger.fine('📡 Subscribing with regex: query.personalagent@');
       _logger.fine('   (Following at_talk_gui pattern for auto-decryption)');
 
-      final stream = _atClient!.notificationService.subscribe(regex: 'query.personalagent@', shouldDecrypt: true);
+      final stream = _atClient!.notificationService.subscribe(
+        regex: 'query.personalagent@',
+        shouldDecrypt: true,
+      );
 
       _logger.fine('✅ Subscribe call completed, got stream');
 
@@ -222,21 +232,35 @@ class AtPlatformService {
 
             // Parse as QueryMessage
             final useOllamaOnly = jsonData['useOllamaOnly'] ?? false;
-            final conversationHistory = jsonData['conversationHistory'] as List<dynamic>?;
+            final conversationHistory =
+                jsonData['conversationHistory'] as List<dynamic>?;
+            final streamSessionId = jsonData['streamSessionId'] as String?;
 
             final query = QueryMessage(
-              id: jsonData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              id:
+                  jsonData['id'] ??
+                  DateTime.now().millisecondsSinceEpoch.toString(),
               content: jsonData['content'] ?? '',
               userId: jsonData['userId'] ?? notification.from ?? '',
               useOllamaOnly: useOllamaOnly,
-              conversationHistory: conversationHistory?.cast<Map<String, dynamic>>(),
-              notificationId: notification.id, // CRITICAL: Use notification ID for mutex
-              timestamp: DateTime.parse(jsonData['timestamp'] ?? DateTime.now().toIso8601String()),
+              conversationHistory: conversationHistory
+                  ?.cast<Map<String, dynamic>>(),
+              conversationId: jsonData['conversationId'] as String?,
+              streamSessionId: streamSessionId, // Stream session ID for routing
+              notificationId:
+                  notification.id, // CRITICAL: Use notification ID for mutex
+              timestamp: DateTime.parse(
+                jsonData['timestamp'] ?? DateTime.now().toIso8601String(),
+              ),
             );
 
             _logger.info('⚡ Processing query: ${query.id}');
-            _logger.info('   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}');
-            _logger.info('   Conversation History: ${conversationHistory?.length ?? 0} messages');
+            _logger.info(
+              '   Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}',
+            );
+            _logger.info(
+              '   Conversation History: ${conversationHistory?.length ?? 0} messages',
+            );
             _logger.info(
               '   Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...',
             );
@@ -273,50 +297,193 @@ class AtPlatformService {
   }
 
   /// Send response message to Flutter app
-  Future<void> sendResponse(String recipientAtSign, ResponseMessage response) async {
-    _ensureInitialized();
+  /// Check if we have a stream channel for the given recipient
+  /// Used to determine if this agent instance should respond to a query
+  bool hasStreamChannel(String recipientAtSign, {String? streamSessionId}) {
+    _logger.fine(
+      '🔍 Checking stream channel for $recipientAtSign (sessionId: $streamSessionId)',
+    );
+    _logger.fine('   Active channels: ${_activeChannels.length}');
 
-    try {
-      final atKey = AtKey()
-        ..key = 'message.${response.id}'
-        ..namespace = 'personalagent'
-        ..sharedWith = recipientAtSign;
-
-      final jsonData = json.encode(response.toJson());
-
-      // Use notificationService.notify instead of direct notify
-      final notificationResult = await _atClient!.notificationService.notify(
-        NotificationParams.forUpdate(atKey, value: jsonData),
-      );
-
-      _logger.fine('Sent response to $recipientAtSign: ${notificationResult.notificationID}');
-    } catch (e, stackTrace) {
-      _logger.severe('Failed to send response', e, stackTrace);
-      rethrow;
+    if (streamSessionId != null) {
+      // Check if we have a channel with this session ID
+      _logger.fine('   Looking for sessionId: $streamSessionId');
+      for (final entry in _activeChannels.entries) {
+        _logger.fine(
+          '   Channel ${entry.key}: sessionId = ${entry.value.sessionId}',
+        );
+        if (entry.value.sessionId == streamSessionId) {
+          _logger.fine('   ✅ MATCH! This agent has the channel');
+          return true;
+        }
+      }
+      _logger.fine('   ❌ NO MATCH! This agent does NOT have the channel');
+      return false;
+    } else {
+      _logger.fine('   No sessionId provided, falling back to atSign check');
+      final hasIt = _activeChannels.containsKey(recipientAtSign);
+      _logger.fine('   Result: $hasIt');
+      return hasIt;
     }
   }
 
-  /// Send response via stream channel (stream-only, no fallback)
-  Future<void> sendStreamResponse(String recipientAtSign, ResponseMessage response) async {
+  /// Send response via stream channel (stream-only, requires sessionId)
+  Future<void> sendStreamResponse(
+    String recipientAtSign,
+    ResponseMessage response, {
+    String? streamSessionId,
+  }) async {
     _ensureInitialized();
 
-    // Get the active stream channel for this recipient
-    final channel = _activeChannels[recipientAtSign];
+    // Try to find the stream channel for this recipient
+    // If streamSessionId is provided, use it to find the correct channel (for mutex winners)
+    // Otherwise, use recipientAtSign to find channel (for original notification receiver)
+    dynamic channel;
 
-    if (channel == null) {
-      _logger.warning('No active stream channel for $recipientAtSign');
-      _logger.warning('Active channels: ${_activeChannels.keys.join(", ")}');
-      throw Exception('No active stream channel for $recipientAtSign. App must connect before sending queries.');
+    if (streamSessionId != null) {
+      // Find channel by sessionId - allows any agent instance to respond
+      for (final entry in _activeChannels.entries) {
+        if (entry.value.sessionId == streamSessionId) {
+          channel = entry.value;
+          break;
+        }
+      }
+
+      if (channel == null) {
+        _logger.warning(
+          'No active stream channel with session ID: $streamSessionId',
+        );
+        final availableSessions = _activeChannels.values
+            .map((ch) => ch.sessionId)
+            .join(", ");
+        _logger.warning('Available sessions: $availableSessions');
+        throw Exception(
+          'No active stream channel for session $streamSessionId',
+        );
+      }
+      _logger.fine('📍 Found channel by session ID: $streamSessionId');
+    } else {
+      // Fall back to looking up by atSign
+      channel = _activeChannels[recipientAtSign];
+
+      if (channel == null) {
+        _logger.warning('No active stream channel for $recipientAtSign');
+        _logger.warning('Active channels: ${_activeChannels.keys.join(", ")}');
+        throw Exception('No active stream channel for $recipientAtSign');
+      }
+      _logger.fine('📍 Found channel by atSign: $recipientAtSign');
     }
 
     try {
       // Send via stream channel
       final jsonData = json.encode(response.toJson());
       channel.sink.add(jsonData);
-
       _logger.fine('📤 Sent response via stream to $recipientAtSign');
     } catch (e, stackTrace) {
-      _logger.severe('Failed to send response via stream to $recipientAtSign', e, stackTrace);
+      _logger.severe('Failed to send response via stream', e, stackTrace);
+
+      // Remove the channel since it's not working
+      _activeChannels.remove(recipientAtSign);
+
+      rethrow;
+    }
+  }
+
+  /// Try to acquire mutex for a query (ensures only one agent responds)
+  /// Accepts nullable mutexId to handle edge cases
+  /// Implementation based on sshnpd's session mutex pattern
+  Future<bool> acquireQueryMutex(Object mutexId, String agentName) async {
+    _ensureInitialized();
+
+    final id = mutexId.toString();
+    if (id.isEmpty || id == 'null') {
+      _logger.warning('⚠️ No valid mutex ID provided');
+      return false;
+    }
+
+    try {
+      final mutexKey = AtKey()
+        ..key = 'mutex.$id'
+        ..namespace = 'personalagent'
+        ..sharedBy = atSign
+        ..sharedWith =
+            atSign // Self-shared for coordination between agent instances
+        ..metadata = (Metadata()
+          ..immutable =
+              true // Only one agent will succeed in creating this
+          ..ttl =
+              60000 // 60 seconds TTL
+          ..isPublic = false
+          ..isEncrypted = false); // Don't encrypt for faster ops
+
+      // Use PutRequestOptions to ensure operation happens on remote server
+      final putOptions = PutRequestOptions()
+        ..shouldEncrypt = false
+        ..useRemoteAtServer =
+            true; // Critical: ensures all agents check same server
+
+      try {
+        await _atClient!.put(
+          mutexKey,
+          agentName,
+          putRequestOptions: putOptions,
+        );
+        _logger.shout(
+          '� Acquired mutex for query $id; will handle this request',
+        );
+        return true;
+      } catch (err) {
+        if (err.toString().toLowerCase().contains('immutable')) {
+          _logger.shout(
+            '🤷‍♂️ Did not acquire mutex for query $id; another agent will handle this',
+          );
+          return false;
+        } else {
+          _logger.warning('Unexpected error acquiring mutex: $err');
+          return true; // Proceed anyway to maintain functionality
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.warning('Failed to acquire mutex', e, stackTrace);
+      return false;
+    }
+  }
+
+  /// Connect to query-specific response stream and send response
+  Future<void> sendStreamResponseToQuery(
+    String recipientAtSign,
+    String queryId,
+    ResponseMessage response,
+  ) async {
+    _ensureInitialized();
+
+    try {
+      _logger.info('🔗 Connecting to query-specific stream: response.$queryId');
+
+      // Connect to the app's bound stream for this specific query
+      final channel = await AtNotificationStreamChannel.connect<String, String>(
+        _atClient!,
+        otherAtsign: recipientAtSign,
+        baseNamespace: 'personalagent',
+        domainNamespace: 'response.$queryId', // Query-specific namespace
+        sendTransformer: const MessageSendTransformer(),
+        recvTransformer: const QueryReceiveTransformer(),
+      );
+
+      _logger.info('✅ Connected to query stream for $queryId');
+
+      // Send the response (may be streamed in chunks)
+      final jsonData = json.encode(response.toJson());
+      channel.sink.add(jsonData);
+      _logger.info('📤 Sent response for query $queryId');
+
+      // Close the channel when done (for non-streaming or after final chunk)
+      if (!response.isPartial) {
+        _logger.fine('🔚 Closing query stream for $queryId (final message)');
+        await channel.sink.close();
+      }
+    } catch (e, stackTrace) {
+      _logger.severe('Failed to send response to query stream', e, stackTrace);
       rethrow;
     }
   }
@@ -355,7 +522,23 @@ class AtPlatformService {
               try {
                 final decoded = json.decode(data);
                 if (decoded['type'] == 'ping') {
-                  _logger.fine('📡 Received ping from $fromAtSign');
+                  _logger.fine(
+                    '📡 Received ping from $fromAtSign, sending pong',
+                  );
+                  // Respond with pong
+                  try {
+                    channel.sink.add(
+                      json.encode({
+                        'type': 'pong',
+                        'timestamp': DateTime.now().toIso8601String(),
+                      }),
+                    );
+                    _logger.fine('🏓 Sent pong to $fromAtSign');
+                  } catch (e) {
+                    _logger.warning(
+                      '⚠️ Failed to send pong to $fromAtSign: $e',
+                    );
+                  }
                 }
               } catch (e) {
                 // Ignore parse errors - might not be JSON
@@ -390,66 +573,9 @@ class AtPlatformService {
 
   void _ensureInitialized() {
     if (!_isInitialized) {
-      throw Exception('AtPlatformService not initialized. Call initialize() first.');
-    }
-  }
-
-  /// Try to acquire a mutex for a specific identifier (query ID, session ID, etc.).
-  /// Returns true if this instance acquired the mutex, false if another instance already has it.
-  ///
-  /// This implements an atomic mutex pattern for load balancing between multiple agents:
-  /// - Uses immutable metadata flag to make key creation atomic
-  /// - First agent to successfully create the key wins (like sshnpd pattern)
-  /// - Other agents get AtKeyException and know to skip the query
-  /// - Mutex expires after ttlSeconds to prevent stale locks
-  Future<bool> tryAcquireMutex({required String mutexId, int ttlSeconds = 30}) async {
-    _ensureInitialized();
-
-    try {
-      // Create mutex key with IMMUTABLE flag for atomic creation
-      // This is the same pattern used by sshnpd for mutex coordination
-      // CRITICAL: Use AtKey.fromString with full key path to create PRIVATE key
-      // that all instances of the same atSign will see identically
-      final mutexKey = AtKey.fromString('$mutexId.query_mutexes.personalagent$atSign')
-        ..metadata = (Metadata()
-          ..ttl =
-              ttlSeconds *
-              1000 // TTL in milliseconds
-          ..immutable = true); // CRITICAL: Makes creation atomic - first wins!
-
-      _logger.info('Attempting to acquire mutex: $mutexId (key: $mutexId.query_mutexes.personalagent$atSign)');
-
-      // Try to create the mutex key atomically
-      // If another agent already created it, this will throw an exception
-      final lockData = json.encode({
-        'timestamp': DateTime.now().toIso8601String(),
-        'agent': atSign,
-        'instanceId': instanceId ?? 'default',
-      });
-
-      final putOptions = PutRequestOptions()..useRemoteAtServer = true; // CRITICAL: write to remote server
-
-      await _atClient!.put(mutexKey, lockData, putRequestOptions: putOptions);
-
-      // Success! This agent won the mutex
-      _logger.info('✅ Acquired mutex: $mutexId');
-      return true;
-    } on AtKeyException catch (e) {
-      // Another agent already has the mutex (immutable key already exists)
-      _logger.info('🔒 Mutex held by another agent: $mutexId - ${e.message}');
-      return false;
-    } catch (e) {
-      // Check if this is an immutable key error (different exception type)
-      final errorMsg = e.toString().toLowerCase();
-      if (errorMsg.contains('immutable')) {
-        _logger.info('🔒 Mutex held by another agent: $mutexId - $e');
-        return false;
-      }
-
-      // For any other error, log it but allow the query to proceed
-      // This ensures the system keeps working even if there are unexpected issues
-      _logger.warning('⚠️ Error with mutex (will proceed anyway): $e');
-      return true;
+      throw Exception(
+        'AtPlatformService not initialized. Call initialize() first.',
+      );
     }
   }
 
