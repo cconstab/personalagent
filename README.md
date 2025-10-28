@@ -100,7 +100,7 @@ chmod +x setup.sh
    - Place your agent's `.atKeys` file in `agent/keys/`
    - Add Claude API key to `agent/.env` (optional, for hybrid mode)
    - Your app's @sign is set up during first launch (onboarding)
-   - See [ATSIGN_ARCHITECTURE.md](ATSIGN_ARCHITECTURE.md) for details
+   - See [docs/guides/ATSIGN_ARCHITECTURE.md](docs/guides/ATSIGN_ARCHITECTURE.md) for details
 
 4. Start the services:
 
@@ -358,7 +358,7 @@ curl https://api.anthropic.com/v1/messages \
 ### 🚧 In Progress (v1.1)
 - [ ] Context management UI
 - [ ] Enhanced error handling and retry logic
-- [ ] Response streaming for real-time feedback
+- [x] Response streaming for real-time feedback
 
 ### 🔮 Future (v2.0+)
 - [ ] Multi-model support (GPT-4, Gemini, local models)
@@ -371,7 +371,8 @@ curl https://api.anthropic.com/v1/messages \
 ## 📖 Documentation
 
 ### Core Documentation
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture with Mermaid diagrams
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture with streaming details
+- **[AT_STREAM_COMPLETE.md](AT_STREAM_COMPLETE.md)** - Streaming architecture implementation
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute to the project
 - **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
@@ -379,6 +380,7 @@ curl https://api.anthropic.com/v1/messages \
 - **[atPlatform Integration](docs/guides/ATSIGN_ARCHITECTURE.md)** - How we use atPlatform for E2E encryption
 - **[Ollama-Only Mode](docs/guides/OLLAMA_ONLY_MODE.md)** - 100% local privacy mode feature
 - **[Keychain Authentication](docs/guides/KEYCHAIN_AUTH.md)** - Seamless OS authentication flow
+- **[Multiple @signs Support](docs/guides/MULTI_ATSIGN_SUPPORT.md)** - Using multiple agent instances
 
 ### Component Documentation
 - **[agent/README.md](agent/README.md)** - Agent service (Dart backend)
