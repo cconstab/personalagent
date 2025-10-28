@@ -466,8 +466,8 @@ class AtClientService {
     }
 
     try {
-      final keys = await _atClient!.getAtKeys(regex: 'context.*');
-      return keys.map((key) => key.key.replaceFirst('context.', '')).toList();
+      final contextMap = await _getAllContext();
+      return contextMap.keys.toList();
     } catch (e, stackTrace) {
       debugPrint('Failed to get context keys: $e');
       debugPrint('StackTrace: $stackTrace');
@@ -475,28 +475,149 @@ class AtClientService {
     }
   }
 
-  /// Store context data on atServer
-  Future<void> storeContext(String key, String value) async {
+  /// Get all context as key-value pairs for display
+  Future<Map<String, String>> getContextMap() async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized');
     }
 
     try {
+      return await _getAllContext();
+    } catch (e, stackTrace) {
+      debugPrint('Failed to get context map: $e');
+      debugPrint('StackTrace: $stackTrace');
+      return {};
+    }
+  }
+
+  /// Store context data on atServer
+  /// Uses a fixed key 'user_context' and stores all context as JSON
+  Future<void> storeContext(String key, String value,
+      {bool enabled = true}) async {
+    if (_atClient == null) {
+      throw Exception('AtClient not initialized');
+    }
+
+    try {
+      // First, get existing context (with enabled flags)
+      final existingContext = await _getAllContextWithFlags();
+
+      // Add or update the key-value pair with enabled flag
+      existingContext[key] = {'value': value, 'enabled': enabled};
+
+      // Store as single JSON object with fixed key name
       final atKey = AtKey()
-        ..key = 'context.$key'
+        ..key = 'user_context' // Fixed key name
         ..namespace = 'personalagent'
         ..sharedWith = _agentAtSign;
 
       final contextData = {
-        'key': key,
-        'value': value,
-        'createdAt': DateTime.now().toIso8601String(),
-        'tags': <String>[],
+        'context': existingContext,
+        'updatedAt': DateTime.now().toIso8601String(),
       };
 
       await _atClient!.put(atKey, json.encode(contextData));
+      debugPrint('✅ Stored context: $key = $value (enabled: $enabled)');
     } catch (e, stackTrace) {
       debugPrint('Failed to store context: $e');
+      debugPrint('StackTrace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  /// Get all context as a map (only values, for backward compatibility)
+  Future<Map<String, String>> _getAllContext() async {
+    final contextWithFlags = await _getAllContextWithFlags();
+    return contextWithFlags.map((k, v) => MapEntry(k, v['value'] as String));
+  }
+
+  /// Get all context with enabled flags
+  Future<Map<String, Map<String, dynamic>>> _getAllContextWithFlags() async {
+    if (_atClient == null) {
+      return {};
+    }
+
+    try {
+      final atKey = AtKey()
+        ..key = 'user_context'
+        ..namespace = 'personalagent'
+        ..sharedWith = _agentAtSign;
+
+      final value = await _atClient!.get(atKey);
+      if (value.value == null) {
+        return {};
+      }
+
+      final jsonData = json.decode(value.value);
+      final contextMap = jsonData['context'] as Map<String, dynamic>;
+
+      // Handle both old format (string values) and new format (object with value/enabled)
+      final result = <String, Map<String, dynamic>>{};
+      contextMap.forEach((key, value) {
+        if (value is Map) {
+          result[key] = {
+            'value': value['value'] ?? '',
+            'enabled': value['enabled'] ?? true,
+          };
+        } else {
+          // Old format: migrate to new format
+          result[key] = {
+            'value': value.toString(),
+            'enabled': true,
+          };
+        }
+      });
+
+      return result;
+    } catch (e) {
+      debugPrint('No existing context found, starting fresh');
+      return {};
+    }
+  }
+
+  /// Get context map with enabled status for UI
+  Future<Map<String, Map<String, dynamic>>> getContextMapWithStatus() async {
+    if (_atClient == null) {
+      throw Exception('AtClient not initialized');
+    }
+
+    try {
+      return await _getAllContextWithFlags();
+    } catch (e, stackTrace) {
+      debugPrint('Failed to get context map with status: $e');
+      debugPrint('StackTrace: $stackTrace');
+      return {};
+    }
+  }
+
+  /// Toggle context enabled status
+  Future<void> toggleContextEnabled(String key) async {
+    if (_atClient == null) {
+      throw Exception('AtClient not initialized');
+    }
+
+    try {
+      final existingContext = await _getAllContextWithFlags();
+
+      if (existingContext.containsKey(key)) {
+        final currentEnabled = existingContext[key]!['enabled'] as bool;
+        existingContext[key]!['enabled'] = !currentEnabled;
+
+        final atKey = AtKey()
+          ..key = 'user_context'
+          ..namespace = 'personalagent'
+          ..sharedWith = _agentAtSign;
+
+        final contextData = {
+          'context': existingContext,
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+
+        await _atClient!.put(atKey, json.encode(contextData));
+        debugPrint('✅ Toggled context $key enabled: ${!currentEnabled}');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Failed to toggle context: $e');
       debugPrint('StackTrace: $stackTrace');
       rethrow;
     }
@@ -509,12 +630,36 @@ class AtClientService {
     }
 
     try {
-      final atKey = AtKey()
-        ..key = 'context.$key'
-        ..namespace = 'personalagent'
-        ..sharedWith = _agentAtSign;
+      // Get existing context with flags
+      final existingContext = await _getAllContextWithFlags();
 
-      await _atClient!.delete(atKey);
+      // Remove the key
+      existingContext.remove(key);
+
+      if (existingContext.isEmpty) {
+        // If no context left, delete the entire key
+        final atKey = AtKey()
+          ..key = 'user_context'
+          ..namespace = 'personalagent'
+          ..sharedWith = _agentAtSign;
+
+        await _atClient!.delete(atKey);
+      } else {
+        // Otherwise, update with remaining context
+        final atKey = AtKey()
+          ..key = 'user_context'
+          ..namespace = 'personalagent'
+          ..sharedWith = _agentAtSign;
+
+        final contextData = {
+          'context': existingContext,
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+
+        await _atClient!.put(atKey, json.encode(contextData));
+      }
+
+      debugPrint('✅ Deleted context: $key');
       return true;
     } catch (e, stackTrace) {
       debugPrint('Failed to delete context: $e');

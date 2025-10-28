@@ -676,11 +676,62 @@ class AgentProvider extends ChangeNotifier {
       debugPrint(
           '📝 Including ${conversationHistory.length} previous messages for context');
 
+      // If this is the first message in the conversation, prepend context as a system message
+      List<ChatMessage> historyWithContext = conversationHistory;
+      if (conversationHistory.isEmpty) {
+        // Get user context with enabled status
+        final contextMapWithStatus =
+            await _atClientService.getContextMapWithStatus();
+
+        // Filter to only enabled context items
+        final enabledContext = <String, String>{};
+        contextMapWithStatus.forEach((key, data) {
+          if (data['enabled'] == true) {
+            enabledContext[key] = data['value'] as String;
+          }
+        });
+
+        if (enabledContext.isNotEmpty) {
+          debugPrint(
+              '📋 Adding user context to first message (${enabledContext.length} enabled items)');
+
+          // Format context as a system message
+          final contextParts = <String>[];
+          enabledContext.forEach((key, value) {
+            contextParts.add('$key: $value');
+          });
+          final contextContent =
+              '''You are a helpful personal AI assistant. The user has shared the following personal information with you. Use this information to personalize your responses and address them appropriately.
+
+=== USER'S PERSONAL INFORMATION ===
+${contextParts.join('\n')}
+===================================
+
+Remember to:
+- Use their name when appropriate if provided
+- Reference their preferences and information naturally
+- Provide personalized responses based on what you know about them
+
+Now respond to their message naturally and conversationally.''';
+
+          // Create a system message (not a user message)
+          final systemMessage = ChatMessage(
+            id: 'system_context',
+            content: contextContent,
+            isUser: false, // This marks it as assistant/system
+            timestamp: DateTime.now(),
+          );
+
+          historyWithContext = [systemMessage];
+          debugPrint('✅ Context added to conversation history');
+        }
+      }
+
       // Send message to agent via atPlatform with conversation context and ID
       await _atClientService.sendMessage(
         userMessage,
         useOllamaOnly: _useOllamaOnly,
-        conversationHistory: conversationHistory,
+        conversationHistory: historyWithContext,
         conversationId:
             conversationIdForThisQuery, // Include conversation ID for stateless routing
       );

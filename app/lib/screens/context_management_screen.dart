@@ -12,7 +12,7 @@ class ContextManagementScreen extends StatefulWidget {
 
 class _ContextManagementScreenState extends State<ContextManagementScreen> {
   final AtClientService _atClientService = AtClientService();
-  List<String> _contextKeys = [];
+  Map<String, Map<String, dynamic>> _contextMapWithStatus = {};
   bool _isLoading = true;
   final TextEditingController _keyController = TextEditingController();
   final TextEditingController _valueController = TextEditingController();
@@ -33,9 +33,9 @@ class _ContextManagementScreenState extends State<ContextManagementScreen> {
   Future<void> _loadContextKeys() async {
     setState(() => _isLoading = true);
     try {
-      final keys = await _atClientService.getContextKeys();
+      final contextMap = await _atClientService.getContextMapWithStatus();
       setState(() {
-        _contextKeys = keys;
+        _contextMapWithStatus = contextMap;
         _isLoading = false;
       });
     } catch (e) {
@@ -53,7 +53,7 @@ class _ContextManagementScreenState extends State<ContextManagementScreen> {
       final success = await _atClientService.deleteContext(key);
       if (success) {
         setState(() {
-          _contextKeys.remove(key);
+          _contextMapWithStatus.remove(key);
         });
         if (mounted) {
           ScaffoldMessenger.of(
@@ -82,10 +82,14 @@ class _ContextManagementScreenState extends State<ContextManagementScreen> {
       await _atClientService.storeContext(
         _keyController.text.trim(),
         _valueController.text.trim(),
+        enabled: true, // New context items are enabled by default
       );
 
       setState(() {
-        _contextKeys.add(_keyController.text.trim());
+        _contextMapWithStatus[_keyController.text.trim()] = {
+          'value': _valueController.text.trim(),
+          'enabled': true,
+        };
       });
 
       _keyController.clear();
@@ -104,6 +108,98 @@ class _ContextManagementScreenState extends State<ContextManagementScreen> {
         ).showSnackBar(SnackBar(content: Text('Failed to add context: $e')));
       }
     }
+  }
+
+  void _showEditContextDialog(String key, String currentValue) {
+    _keyController.text = key;
+    _valueController.text = currentValue;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Context'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _keyController,
+              decoration: const InputDecoration(
+                labelText: 'Key',
+                border: OutlineInputBorder(),
+              ),
+              enabled: false, // Don't allow changing the key
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _valueController,
+              decoration: const InputDecoration(
+                labelText: 'Value',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _keyController.clear();
+              _valueController.clear();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (_valueController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Value cannot be empty')),
+                );
+                return;
+              }
+
+              try {
+                // Get current enabled status and preserve it
+                final currentEnabled =
+                    _contextMapWithStatus[key]?['enabled'] as bool? ?? true;
+
+                await _atClientService.storeContext(
+                  key,
+                  _valueController.text.trim(),
+                  enabled: currentEnabled,
+                );
+
+                setState(() {
+                  _contextMapWithStatus[key] = {
+                    'value': _valueController.text.trim(),
+                    'enabled': currentEnabled,
+                  };
+                });
+
+                _keyController.clear();
+                _valueController.clear();
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Context updated successfully')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to update context: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAddContextDialog() {
@@ -160,7 +256,7 @@ class _ContextManagementScreenState extends State<ContextManagementScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _contextKeys.isEmpty
+          : _contextMapWithStatus.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -194,39 +290,95 @@ class _ContextManagementScreenState extends State<ContextManagementScreen> {
                   ),
                 )
               : ListView.builder(
-                  itemCount: _contextKeys.length,
+                  itemCount: _contextMapWithStatus.length,
                   itemBuilder: (context, index) {
-                    final key = _contextKeys[index];
+                    final key = _contextMapWithStatus.keys.elementAt(index);
+                    final data = _contextMapWithStatus[key]!;
+                    final value = data['value'] as String;
+                    final enabled = data['enabled'] as bool;
+
                     return ListTile(
-                      leading: const Icon(Icons.key),
-                      title: Text(key),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Context'),
-                              content: Text(
-                                'Are you sure you want to delete "$key"?',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    _deleteContext(key);
-                                  },
-                                  child: const Text('Delete'),
-                                ),
-                              ],
-                            ),
-                          );
+                      leading: Checkbox(
+                        value: enabled,
+                        onChanged: (bool? newValue) async {
+                          try {
+                            await _atClientService.toggleContextEnabled(key);
+                            setState(() {
+                              _contextMapWithStatus[key]!['enabled'] =
+                                  newValue ?? true;
+                            });
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed to toggle: $e')),
+                              );
+                            }
+                          }
                         },
                       ),
+                      title: Text(
+                        key,
+                        style: enabled
+                            ? null
+                            : TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.5),
+                              ),
+                      ),
+                      subtitle: Text(
+                        value,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: enabled
+                            ? null
+                            : TextStyle(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.4),
+                              ),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined),
+                            tooltip: 'Edit',
+                            onPressed: () => _showEditContextDialog(key, value),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            tooltip: 'Delete',
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Delete Context'),
+                                  content: Text(
+                                    'Are you sure you want to delete "$key"?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    FilledButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _deleteContext(key);
+                                      },
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      onTap: () => _showEditContextDialog(key, value),
                     );
                   },
                 ),
