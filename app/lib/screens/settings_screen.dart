@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/agent_provider.dart';
 import 'context_management_screen.dart';
+import 'debug_atkeys_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -67,11 +68,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final atSign = controller.text.trim();
               if (atSign.isNotEmpty) {
                 // Add @ prefix if missing
-                final formattedAtSign = atSign.startsWith('@') ? atSign : '@$atSign';
+                final formattedAtSign =
+                    atSign.startsWith('@') ? atSign : '@$atSign';
 
                 // Save to atPlatform via AuthProvider
                 try {
-                  await context.read<AuthProvider>().saveAgentAtSign(formattedAtSign);
+                  await context
+                      .read<AuthProvider>()
+                      .saveAgentAtSign(formattedAtSign);
                   context.read<AgentProvider>().setAgentAtSign(formattedAtSign);
 
                   if (context.mounted) {
@@ -151,12 +155,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   return ListTile(
                     leading: Icon(
                       Icons.account_circle,
-                      color: isCurrent ? Theme.of(context).colorScheme.primary : null,
+                      color: isCurrent
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
                     ),
                     title: Text(
                       atSign,
                       style: TextStyle(
-                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     subtitle: isCurrent ? const Text('Current') : null,
@@ -347,16 +354,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 itemCount: atSigns.length,
                 itemBuilder: (context, index) {
                   final atSign = atSigns[index];
-                  final isCurrent = atSign == this.context.read<AuthProvider>().atSign;
+                  final isCurrent =
+                      atSign == this.context.read<AuthProvider>().atSign;
                   return ListTile(
                     leading: Icon(
                       Icons.account_circle,
-                      color: isCurrent ? Theme.of(context).colorScheme.primary : null,
+                      color: isCurrent
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
                     ),
                     title: Text(
                       atSign,
                       style: TextStyle(
-                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     subtitle: isCurrent ? const Text('Current') : null,
@@ -565,32 +576,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => _showManageAtSignsDialog(),
           ),
           ListTile(
-            leading: const Icon(Icons.delete_outline),
-            title: const Text('Clear Chat History'),
+            leading: const Icon(Icons.key),
+            title: const Text('Debug: View atPlatform Keys'),
+            subtitle: const Text('View and manage all stored keys'),
+            trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Clear Chat History'),
-                  content: const Text(
-                    'Are you sure you want to clear all chat history?',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        context.read<AgentProvider>().clearMessages();
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Chat history cleared')),
-                        );
-                      },
-                      child: const Text('Clear'),
-                    ),
-                  ],
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DebugAtKeysScreen(),
                 ),
               );
             },
@@ -604,22 +598,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.bug_report),
-            title: const Text('Debug: List atPlatform Keys'),
-            subtitle: const Text('Show what conversations are stored'),
-            onTap: () async {
-              final agent = context.read<AgentProvider>();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Check console for debug output')),
-              );
-              await agent.debugListAllKeys();
-            },
-          ),
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('Version'),
-            subtitle: Text('0.1.0'),
+            subtitle: Text('0.2.0'),
           ),
           ListTile(
             leading: const Icon(Icons.code),
@@ -627,7 +609,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('View source code on GitHub'),
             trailing: const Icon(Icons.open_in_new),
             onTap: () async {
-              final url = Uri.parse('https://github.com/cconstab/personalagent');
+              final url =
+                  Uri.parse('https://github.com/cconstab/personalagent');
               if (await canLaunchUrl(url)) {
                 await launchUrl(url, mode: LaunchMode.externalApplication);
               } else {
@@ -664,7 +647,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           await context.read<AuthProvider>().signOut();
                           if (context.mounted) {
                             // Pop all routes to return to the front screen (onboarding)
-                            Navigator.of(context).popUntil((route) => route.isFirst);
+                            Navigator.of(context)
+                                .popUntil((route) => route.isFirst);
                           }
                         },
                         child: const Text('Sign Out'),

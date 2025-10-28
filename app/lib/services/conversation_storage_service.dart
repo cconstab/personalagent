@@ -62,7 +62,8 @@ class ConversationStorageService {
       await _atClient!.put(
         key,
         jsonData,
-        putRequestOptions: PutRequestOptions()..useRemoteAtServer = true, // Push to remote server for sync
+        putRequestOptions: PutRequestOptions()
+          ..useRemoteAtServer = true, // Push to remote server for sync
       );
     } catch (e) {
       debugPrint('❌ Error saving conversation: $e');
@@ -119,7 +120,8 @@ class ConversationStorageService {
             final conversation = Conversation.fromJson(jsonData);
             conversations.add(conversation);
 
-            debugPrint('   ✓ Loaded: ${conversation.title} (${conversation.messages.length} msgs)');
+            debugPrint(
+                '   ✓ Loaded: ${conversation.title} (${conversation.messages.length} msgs)');
           } else {
             debugPrint('   ⚠️ Key exists but value is null: $keyString');
           }
@@ -132,7 +134,8 @@ class ConversationStorageService {
       // Sort by updatedAt (most recent first)
       conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
-      debugPrint('💾 Successfully loaded ${conversations.length} conversations');
+      debugPrint(
+          '💾 Successfully loaded ${conversations.length} conversations');
       return conversations;
     } catch (e) {
       debugPrint('❌ Error loading conversations: $e');
@@ -151,7 +154,8 @@ class ConversationStorageService {
     // Check if AtClient is authenticated (has a current @sign)
     final currentAtSign = _atClient!.getCurrentAtSign();
     if (currentAtSign == null) {
-      debugPrint('⚠️ AtClient not authenticated yet, cannot delete conversation');
+      debugPrint(
+          '⚠️ AtClient not authenticated yet, cannot delete conversation');
       return; // Silently return instead of throwing during initialization
     }
 
@@ -164,13 +168,15 @@ class ConversationStorageService {
 
       debugPrint('🗑️ Attempting to delete conversation...');
       debugPrint('   Conversation ID: $conversationId');
-      debugPrint('   AtKey: $_conversationKeyPrefix.$conversationId.$_namespace$currentAtSign');
+      debugPrint(
+          '   AtKey: $_conversationKeyPrefix.$conversationId.$_namespace$currentAtSign');
       debugPrint('   Using remote server: true');
 
       // Delete from atPlatform - MUST push to remote server
       final deleteResult = await _atClient!.delete(
         key,
-        deleteRequestOptions: DeleteRequestOptions()..useRemoteAtServer = true, // Critical: Delete from remote server
+        deleteRequestOptions: DeleteRequestOptions()
+          ..useRemoteAtServer = true, // Critical: Delete from remote server
       );
 
       debugPrint('🗑️ Deleted conversation $conversationId from atPlatform');
@@ -248,29 +254,22 @@ class ConversationStorageService {
 
     try {
       final currentAtSign = _atClient!.getCurrentAtSign();
-      debugPrint('🔍 DEBUG: Listing all keys for $currentAtSign');
+      debugPrint(
+          '🔍 DEBUG: Listing all keys in personalagent namespace for $currentAtSign');
 
-      // Get ALL keys (no filter)
-      final allKeys = await _atClient!.getAtKeys();
-      debugPrint('   Total keys: ${allKeys.length}');
+      // Get all keys in the personalagent namespace
+      final regex = '.*\\.$_namespace$currentAtSign';
+      final namespaceKeys = await _atClient!.getAtKeys(regex: regex);
+      debugPrint(
+          '   Total keys in personalagent namespace: ${namespaceKeys.length}');
 
-      // Get conversation keys specifically
-      final regex = '$_conversationKeyPrefix\\..*\\.$_namespace$currentAtSign';
-      final conversationKeys = await _atClient!.getAtKeys(regex: regex);
-      debugPrint('   Conversation keys: ${conversationKeys.length}');
-
-      if (allKeys.isNotEmpty) {
-        debugPrint('   First 10 keys:');
-        for (var i = 0; i < allKeys.length && i < 10; i++) {
-          debugPrint('   - ${allKeys.elementAt(i)}');
-        }
-      }
-
-      if (conversationKeys.isNotEmpty) {
-        debugPrint('   All conversation keys:');
-        for (final key in conversationKeys) {
+      if (namespaceKeys.isNotEmpty) {
+        debugPrint('   All personalagent keys:');
+        for (final key in namespaceKeys) {
           debugPrint('   - $key');
         }
+      } else {
+        debugPrint('   No keys found in personalagent namespace');
       }
     } catch (e) {
       debugPrint('❌ Error listing keys: $e');

@@ -130,7 +130,7 @@ class _InputFieldState extends State<InputField> {
                     scrollController: _scrollController,
                     scrollPhysics: const ClampingScrollPhysics(),
                     decoration: InputDecoration(
-                      hintText: 'Ask me anything... (Shift+Enter for new line)',
+                      hintText: 'Ask me anything...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,

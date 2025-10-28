@@ -8,6 +8,29 @@ import 'package:logging/logging.dart';
 import '../models/message.dart';
 import 'stream_transformers.dart';
 
+/// Information about an atKey
+class AtKeyInfo {
+  final AtKey atKey;
+  final String keyString;
+  final String displayName;
+  final String type;
+  final String? sharedWith;
+  final int? ttl;
+  final String ttlDisplay;
+  final String? value;
+
+  AtKeyInfo({
+    required this.atKey,
+    required this.keyString,
+    required this.displayName,
+    required this.type,
+    this.sharedWith,
+    this.ttl,
+    required this.ttlDisplay,
+    this.value,
+  });
+}
+
 /// Service for communicating with the agent via atPlatform
 class AtClientService {
   static final AtClientService _instance = AtClientService._internal();
@@ -695,6 +718,159 @@ class AtClientService {
       debugPrint('StackTrace: $stackTrace');
       return false;
     }
+  }
+
+  /// Clean up old shared context keys (from before self-owned migration)
+  Future<int> cleanupOldSharedContext() async {
+    if (_atClient == null) {
+      throw Exception('AtClient not initialized');
+    }
+
+    if (_agentAtSign == null || _agentAtSign!.isEmpty) {
+      throw Exception('Agent atSign not set');
+    }
+
+    int deletedCount = 0;
+
+    try {
+      debugPrint('🧹 Searching for old shared context keys...');
+      final currentAtSign = _currentAtSign;
+
+      // Pattern 1: Old individual context keys like @llama:context.myname.personalagent@cconstab
+      final pattern1 =
+          '$_agentAtSign:context\\..*\\.personalagent$currentAtSign';
+      final keys1 = await _atClient!.getAtKeys(regex: pattern1);
+
+      // Pattern 2: Old consolidated context key like @llama:user_context.personalagent@cconstab
+      final pattern2 =
+          '$_agentAtSign:user_context\\.personalagent$currentAtSign';
+      final keys2 = await _atClient!.getAtKeys(regex: pattern2);
+
+      final allOldKeys = [...keys1, ...keys2];
+
+      if (allOldKeys.isEmpty) {
+        debugPrint('✅ No old shared context keys found');
+        return 0;
+      }
+
+      debugPrint('📦 Found ${allOldKeys.length} old context key(s):');
+      for (final key in allOldKeys) {
+        debugPrint('   - $key');
+      }
+
+      // Delete each old key
+      for (final atKey in allOldKeys) {
+        try {
+          await _atClient!.delete(atKey);
+          deletedCount++;
+          debugPrint('   ✓ Deleted: $atKey');
+        } catch (e) {
+          debugPrint('   ✗ Failed to delete: $atKey ($e)');
+        }
+      }
+
+      debugPrint(
+          '✅ Cleanup complete! Deleted $deletedCount/${allOldKeys.length} keys');
+      return deletedCount;
+    } catch (e, stackTrace) {
+      debugPrint('Failed to cleanup old context: $e');
+      debugPrint('StackTrace: $stackTrace');
+      return deletedCount;
+    }
+  }
+
+  /// Get all keys in personalagent namespace with metadata
+  Future<List<AtKeyInfo>> getPersonalAgentKeys() async {
+    if (_atClient == null) {
+      throw Exception('AtClient not initialized');
+    }
+
+    try {
+      final currentAtSign = _currentAtSign;
+      final regex = '.*\\.personalagent$currentAtSign';
+      final atKeys = await _atClient!.getAtKeys(regex: regex);
+
+      final keyInfoList = <AtKeyInfo>[];
+
+      for (final atKey in atKeys) {
+        try {
+          // Get metadata
+          final metadata = await _atClient!.getMeta(atKey);
+
+          // Get value
+          String? value;
+          try {
+            final result = await _atClient!.get(atKey);
+            value = result.value?.toString();
+          } catch (e) {
+            value = '(unable to read: $e)';
+          }
+
+          // Determine type
+          String type = 'unknown';
+          String displayName = atKey.key;
+
+          if (atKey.key.startsWith('conversation_')) {
+            type = 'conversation';
+            displayName =
+                'Conversation ${atKey.key.replaceAll('conversation_', '')}';
+          } else if (atKey.key == 'user_context' ||
+              atKey.key.startsWith('context.')) {
+            type = 'context';
+            displayName = atKey.key == 'user_context'
+                ? 'User Context'
+                : 'Context: ${atKey.key.replaceAll('context.', '')}';
+          } else if (atKey.key.startsWith('mapping.')) {
+            type = 'mapping';
+            displayName = 'Query Mapping';
+          }
+
+          // Format TTL
+          String ttlDisplay = 'Never expires';
+          if (metadata?.ttl != null && metadata!.ttl! > 0) {
+            final ttlMs = metadata.ttl!;
+            final duration = Duration(milliseconds: ttlMs);
+            if (duration.inDays > 0) {
+              ttlDisplay = '${duration.inDays} days';
+            } else if (duration.inHours > 0) {
+              ttlDisplay = '${duration.inHours} hours';
+            } else if (duration.inMinutes > 0) {
+              ttlDisplay = '${duration.inMinutes} minutes';
+            } else {
+              ttlDisplay = '${duration.inSeconds} seconds';
+            }
+          }
+
+          keyInfoList.add(AtKeyInfo(
+            atKey: atKey,
+            keyString: atKey.toString(),
+            displayName: displayName,
+            type: type,
+            sharedWith: atKey.sharedWith,
+            ttl: metadata?.ttl,
+            ttlDisplay: ttlDisplay,
+            value: value,
+          ));
+        } catch (e) {
+          debugPrint('Error processing key ${atKey.key}: $e');
+        }
+      }
+
+      return keyInfoList;
+    } catch (e, stackTrace) {
+      debugPrint('Failed to get keys: $e');
+      debugPrint('StackTrace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  /// Delete a specific atKey
+  Future<void> deleteAtKey(AtKey atKey) async {
+    if (_atClient == null) {
+      throw Exception('AtClient not initialized');
+    }
+
+    await _atClient!.delete(atKey);
   }
 
   /// Reset the service (for switching @signs or signing out)
