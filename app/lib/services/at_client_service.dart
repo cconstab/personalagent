@@ -503,7 +503,10 @@ class AtClientService {
       final existingContext = await _getAllContextWithFlags();
 
       // Add or update the key-value pair with enabled flag
-      existingContext[key] = {'value': value, 'enabled': enabled};
+      existingContext[key] = <String, dynamic>{
+        'value': value,
+        'enabled': enabled
+      };
 
       // Store as single JSON object with fixed key name
       final atKey = AtKey()
@@ -511,8 +514,17 @@ class AtClientService {
         ..namespace = 'personalagent'
         ..sharedWith = _agentAtSign;
 
-      final contextData = {
-        'context': existingContext,
+      // Convert to proper JSON-serializable structure
+      final contextForJson = <String, dynamic>{};
+      existingContext.forEach((k, v) {
+        contextForJson[k] = <String, dynamic>{
+          'value': v['value'],
+          'enabled': v['enabled'],
+        };
+      });
+
+      final contextData = <String, dynamic>{
+        'context': contextForJson,
         'updatedAt': DateTime.now().toIso8601String(),
       };
 
@@ -608,8 +620,17 @@ class AtClientService {
           ..namespace = 'personalagent'
           ..sharedWith = _agentAtSign;
 
-        final contextData = {
-          'context': existingContext,
+        // Convert to proper JSON-serializable structure
+        final contextForJson = <String, dynamic>{};
+        existingContext.forEach((k, v) {
+          contextForJson[k] = <String, dynamic>{
+            'value': v['value'],
+            'enabled': v['enabled'],
+          };
+        });
+
+        final contextData = <String, dynamic>{
+          'context': contextForJson,
           'updatedAt': DateTime.now().toIso8601String(),
         };
 
@@ -651,8 +672,17 @@ class AtClientService {
           ..namespace = 'personalagent'
           ..sharedWith = _agentAtSign;
 
-        final contextData = {
-          'context': existingContext,
+        // Convert to proper JSON-serializable structure
+        final contextForJson = <String, dynamic>{};
+        existingContext.forEach((k, v) {
+          contextForJson[k] = <String, dynamic>{
+            'value': v['value'],
+            'enabled': v['enabled'],
+          };
+        });
+
+        final contextData = <String, dynamic>{
+          'context': contextForJson,
           'updatedAt': DateTime.now().toIso8601String(),
         };
 
