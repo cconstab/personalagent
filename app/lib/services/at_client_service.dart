@@ -512,7 +512,7 @@ class AtClientService {
       final atKey = AtKey()
         ..key = 'user_context' // Fixed key name
         ..namespace = 'personalagent'
-        ..sharedWith = _agentAtSign;
+        ..sharedWith = null; // Self-owned, not shared with agent
 
       // Convert to proper JSON-serializable structure
       final contextForJson = <String, dynamic>{};
@@ -553,7 +553,7 @@ class AtClientService {
       final atKey = AtKey()
         ..key = 'user_context'
         ..namespace = 'personalagent'
-        ..sharedWith = _agentAtSign;
+        ..sharedWith = null; // Self-owned
 
       final value = await _atClient!.get(atKey);
       if (value.value == null) {
@@ -618,7 +618,7 @@ class AtClientService {
         final atKey = AtKey()
           ..key = 'user_context'
           ..namespace = 'personalagent'
-          ..sharedWith = _agentAtSign;
+          ..sharedWith = null; // Self-owned
 
         // Convert to proper JSON-serializable structure
         final contextForJson = <String, dynamic>{};
@@ -662,7 +662,7 @@ class AtClientService {
         final atKey = AtKey()
           ..key = 'user_context'
           ..namespace = 'personalagent'
-          ..sharedWith = _agentAtSign;
+          ..sharedWith = null; // Self-owned
 
         await _atClient!.delete(atKey);
       } else {
@@ -670,9 +670,8 @@ class AtClientService {
         final atKey = AtKey()
           ..key = 'user_context'
           ..namespace = 'personalagent'
-          ..sharedWith = _agentAtSign;
+          ..sharedWith = null; // Self-owned
 
-        // Convert to proper JSON-serializable structure
         final contextForJson = <String, dynamic>{};
         existingContext.forEach((k, v) {
           contextForJson[k] = <String, dynamic>{
