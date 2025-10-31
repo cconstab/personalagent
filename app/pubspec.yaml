@@ -43,7 +43,7 @@ dev_dependencies:
 
 dependency_overrides:
   # Match noports project's working versions
-  showcaseview: 3.0.0
+  showcaseview: ^5.0.1
 
 flutter:
   uses-material-design: true
