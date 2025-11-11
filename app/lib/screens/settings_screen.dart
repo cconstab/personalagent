@@ -25,6 +25,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
   }
 
+  // Helper method to show a banner at the top using MaterialBanner instead of SnackBar
+  // This avoids layout conflicts and positioning issues
+  void _showTopSnackBar(BuildContext context, String message, {Color? backgroundColor}) {
+    // Clear any existing banners first
+    ScaffoldMessenger.of(context).clearMaterialBanners();
+
+    // Determine colors based on background
+    final bgColor = backgroundColor ?? Theme.of(context).colorScheme.inverseSurface;
+    final textColor =
+        backgroundColor == Colors.red || backgroundColor == Colors.green || backgroundColor == Colors.orange
+            ? Colors.white
+            : Theme.of(context).colorScheme.onInverseSurface;
+
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    scaffoldMessenger.showMaterialBanner(
+      MaterialBanner(
+        content: Text(
+          message,
+          style: TextStyle(color: textColor),
+        ),
+        backgroundColor: bgColor,
+        leading: Icon(
+          backgroundColor == Colors.red
+              ? Icons.error_outline
+              : backgroundColor == Colors.green
+                  ? Icons.check_circle_outline
+                  : backgroundColor == Colors.orange
+                      ? Icons.info_outline
+                      : Icons.info_outline,
+          color: textColor,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              scaffoldMessenger.hideCurrentMaterialBanner();
+            },
+            child: Text('Dismiss', style: TextStyle(color: textColor)),
+          ),
+        ],
+      ),
+    );
+
+    // Auto-dismiss after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      scaffoldMessenger.hideCurrentMaterialBanner();
+    });
+  }
+
   void _showFontFamilyDialog(BuildContext context, SettingsProvider settings) {
     showDialog(
       context: context,
@@ -167,26 +216,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   if (context.mounted) {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Agent atSign set to $formattedAtSign'),
-                        behavior: SnackBarBehavior.floating,
-                        margin: EdgeInsets.only(
-                          bottom: MediaQuery.of(context).size.height - 100,
-                          left: 10,
-                          right: 10,
-                        ),
-                      ),
-                    );
+                    _showTopSnackBar(context, 'Agent atSign set to $formattedAtSign');
                   }
                 } catch (e) {
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to save agent atSign: $e'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
+                    _showTopSnackBar(
+                      context,
+                      'Failed to save agent atSign: $e',
+                      backgroundColor: Colors.red,
                     );
                   }
                 }
@@ -206,17 +243,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
 
     if (atSigns.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('No atSigns found in keychain'),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).size.height - 100,
-            left: 10,
-            right: 10,
-          ),
-        ),
-      );
+      _showTopSnackBar(context, 'No atSigns found in keychain');
       return;
     }
 
@@ -287,17 +314,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (currentAtSign == atSign) {
         debugPrint('Already using $atSign');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Already using $atSign'),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-              margin: EdgeInsets.only(
-                bottom: MediaQuery.of(context).size.height - 100,
-                left: 10,
-                right: 10,
-              ),
-            ),
+          _showTopSnackBar(
+            context,
+            'Already using $atSign',
+            backgroundColor: Colors.orange,
           );
         }
         return;
@@ -305,18 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       // Show loading
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Switching to $atSign...'),
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
-          ),
-        );
+        _showTopSnackBar(context, 'Switching to $atSign...');
       }
 
       // NOTE: We do NOT call clearMessages() here because it would save an empty
@@ -364,17 +373,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Success! Close settings and stay on home screen
           if (mounted) {
             Navigator.of(context).pop(); // Close settings
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('✅ Switched to $atSign'),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).size.height - 100,
-                  left: 10,
-                  right: 10,
-                ),
-              ),
+            _showTopSnackBar(
+              context,
+              '✅ Switched to $atSign',
+              backgroundColor: Colors.green,
             );
           }
         } else {
@@ -384,18 +386,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       debugPrint('Error switching atSign: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to switch atSign: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
-          ),
+        _showTopSnackBar(
+          context,
+          'Failed to switch atSign: $e',
+          backgroundColor: Colors.red,
         );
       }
     }
@@ -408,17 +402,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
 
     if (atSigns.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('No atSigns found in keychain'),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(
-            bottom: MediaQuery.of(context).size.height - 100,
-            left: 10,
-            right: 10,
-          ),
-        ),
-      );
+      _showTopSnackBar(context, 'No atSigns found in keychain');
       return;
     }
 
@@ -520,17 +504,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (result.exitCode == 0) {
           debugPrint('✅ Removed $atSign from keychain');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$atSign removed from keychain'),
-                backgroundColor: Colors.green,
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).size.height - 100,
-                  left: 10,
-                  right: 10,
-                ),
-              ),
+            _showTopSnackBar(
+              context,
+              '$atSign removed from keychain',
+              backgroundColor: Colors.green,
             );
           }
         } else {
@@ -542,17 +519,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       debugPrint('Error removing atSign: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to remove atSign: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            margin: EdgeInsets.only(
-              bottom: MediaQuery.of(context).size.height - 100,
-              left: 10,
-              right: 10,
-            ),
-          ),
+        _showTopSnackBar(
+          context,
+          'Failed to remove atSign: $e',
+          backgroundColor: Colors.red,
         );
       }
     }
@@ -606,20 +576,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (value) {
                   context.read<AgentProvider>().setUseOllamaOnly(value);
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        value
-                            ? 'Ollama only mode enabled - 100% private'
-                            : 'Hybrid mode enabled - uses Claude when needed',
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      margin: EdgeInsets.only(
-                        bottom: MediaQuery.of(context).size.height - 100,
-                        left: 10,
-                        right: 10,
-                      ),
-                    ),
+                  _showTopSnackBar(
+                    context,
+                    value ? 'Ollama only mode enabled - 100% private' : 'Hybrid mode enabled - uses Claude when needed',
                   );
                 },
               );
@@ -771,11 +730,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await launchUrl(url, mode: LaunchMode.externalApplication);
               } else {
                 if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Could not open GitHub'),
-                    ),
-                  );
+                  _showTopSnackBar(context, 'Could not open GitHub');
                 }
               }
             },
