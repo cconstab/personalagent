@@ -5,8 +5,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:at_client_mobile/at_client_mobile.dart';
 import 'package:at_onboarding_flutter/at_onboarding_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
 import '../providers/agent_provider.dart';
+import '../providers/settings_provider.dart';
 import 'context_management_screen.dart';
 import 'debug_atkeys_screen.dart';
 
@@ -21,6 +23,94 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+  }
+
+  void _showFontFamilyDialog(BuildContext context, SettingsProvider settings) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Select Font Family'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: SettingsProvider.availableFonts.length,
+            itemBuilder: (context, index) {
+              final fontFamily = SettingsProvider.availableFonts[index];
+              final isSelected = fontFamily == settings.fontFamily;
+
+              // Get the appropriate TextStyle for preview
+              TextStyle? previewStyle;
+              if (fontFamily != 'System Default') {
+                try {
+                  switch (fontFamily) {
+                    case 'Roboto':
+                      previewStyle = GoogleFonts.roboto();
+                      break;
+                    case 'Open Sans':
+                      previewStyle = GoogleFonts.openSans();
+                      break;
+                    case 'Lato':
+                      previewStyle = GoogleFonts.lato();
+                      break;
+                    case 'Montserrat':
+                      previewStyle = GoogleFonts.montserrat();
+                      break;
+                    case 'Poppins':
+                      previewStyle = GoogleFonts.poppins();
+                      break;
+                    case 'Raleway':
+                      previewStyle = GoogleFonts.raleway();
+                      break;
+                    case 'Source Sans Pro':
+                      previewStyle = GoogleFonts.sourceSans3();
+                      break;
+                    case 'Ubuntu':
+                      previewStyle = GoogleFonts.ubuntu();
+                      break;
+                    case 'Fira Sans':
+                      previewStyle = GoogleFonts.firaSans();
+                      break;
+                  }
+                } catch (e) {
+                  // If Google Fonts fails, use default
+                  previewStyle = null;
+                }
+              }
+
+              return ListTile(
+                title: Text(
+                  fontFamily,
+                  style: (previewStyle ?? const TextStyle()).copyWith(
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                ),
+                subtitle: Text(
+                  'The quick brown fox jumps',
+                  style: previewStyle?.copyWith(fontSize: 12),
+                ),
+                trailing: isSelected
+                    ? Icon(
+                        Icons.check_circle,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
+                    : null,
+                onTap: () {
+                  settings.setFontFamily(fontFamily);
+                  Navigator.pop(dialogContext);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showAgentAtSignDialog(BuildContext context) {
@@ -68,14 +158,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final atSign = controller.text.trim();
               if (atSign.isNotEmpty) {
                 // Add @ prefix if missing
-                final formattedAtSign =
-                    atSign.startsWith('@') ? atSign : '@$atSign';
+                final formattedAtSign = atSign.startsWith('@') ? atSign : '@$atSign';
 
                 // Save to atPlatform via AuthProvider
                 try {
-                  await context
-                      .read<AuthProvider>()
-                      .saveAgentAtSign(formattedAtSign);
+                  await context.read<AuthProvider>().saveAgentAtSign(formattedAtSign);
                   context.read<AgentProvider>().setAgentAtSign(formattedAtSign);
 
                   if (context.mounted) {
@@ -155,15 +242,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   return ListTile(
                     leading: Icon(
                       Icons.account_circle,
-                      color: isCurrent
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color: isCurrent ? Theme.of(context).colorScheme.primary : null,
                     ),
                     title: Text(
                       atSign,
                       style: TextStyle(
-                        fontWeight:
-                            isCurrent ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     subtitle: isCurrent ? const Text('Current') : null,
@@ -354,20 +438,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 itemCount: atSigns.length,
                 itemBuilder: (context, index) {
                   final atSign = atSigns[index];
-                  final isCurrent =
-                      atSign == this.context.read<AuthProvider>().atSign;
+                  final isCurrent = atSign == this.context.read<AuthProvider>().atSign;
                   return ListTile(
                     leading: Icon(
                       Icons.account_circle,
-                      color: isCurrent
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color: isCurrent ? Theme.of(context).colorScheme.primary : null,
                     ),
                     title: Text(
                       atSign,
                       style: TextStyle(
-                        fontWeight:
-                            isCurrent ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     subtitle: isCurrent ? const Text('Current') : null,
@@ -550,6 +630,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
+              'Appearance',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+          Consumer<SettingsProvider>(
+            builder: (context, settings, _) {
+              return Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.font_download),
+                    title: const Text('Font Family'),
+                    subtitle: Text(settings.fontFamily),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showFontFamilyDialog(context, settings),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.format_size),
+                    title: const Text('Font Size'),
+                    subtitle: Text('${settings.fontSize.toStringAsFixed(0)} pt'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove),
+                          onPressed: settings.fontSize > SettingsProvider.minFontSize
+                              ? () => settings.setFontSize(settings.fontSize - 1)
+                              : null,
+                        ),
+                        SizedBox(
+                          width: 40,
+                          child: Center(
+                            child: Text(
+                              settings.fontSize.toStringAsFixed(0),
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: settings.fontSize < SettingsProvider.maxFontSize
+                              ? () => settings.setFontSize(settings.fontSize + 1)
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Slider(
+                            value: settings.fontSize,
+                            min: SettingsProvider.minFontSize,
+                            max: SettingsProvider.maxFontSize,
+                            divisions: ((SettingsProvider.maxFontSize - SettingsProvider.minFontSize) / 1).round(),
+                            label: '${settings.fontSize.toStringAsFixed(0)} pt',
+                            onChanged: (value) => settings.setFontSize(value),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () => settings.setFontSize(SettingsProvider.defaultFontSize),
+                          icon: const Icon(Icons.refresh, size: 16),
+                          label: const Text('Reset'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const Divider(),
+          const SizedBox(height: 8),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
               'Data Management',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
@@ -609,8 +766,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('View source code on GitHub'),
             trailing: const Icon(Icons.open_in_new),
             onTap: () async {
-              final url =
-                  Uri.parse('https://github.com/cconstab/personalagent');
+              final url = Uri.parse('https://github.com/cconstab/personalagent');
               if (await canLaunchUrl(url)) {
                 await launchUrl(url, mode: LaunchMode.externalApplication);
               } else {
@@ -647,8 +803,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           await context.read<AuthProvider>().signOut();
                           if (context.mounted) {
                             // Pop all routes to return to the front screen (onboarding)
-                            Navigator.of(context)
-                                .popUntil((route) => route.isFirst);
+                            Navigator.of(context).popUntil((route) => route.isFirst);
                           }
                         },
                         child: const Text('Sign Out'),
