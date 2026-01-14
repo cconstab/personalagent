@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/message.dart';
+import '../providers/agent_provider.dart';
 
 class ChatBubble extends StatefulWidget {
   final ChatMessage message;
@@ -16,6 +18,8 @@ class ChatBubble extends StatefulWidget {
 
 class _ChatBubbleState extends State<ChatBubble> {
   bool _isHovering = false;
+  ChatMessage? _streamingMessage;
+  AgentProvider? _agentProvider;
 
   Future<void> _copyToClipboard(BuildContext context) async {
     try {
@@ -54,9 +58,45 @@ class _ChatBubbleState extends State<ChatBubble> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // **PERFORMANCE FIX**: Listen for streaming updates only for this message
+    // This prevents rebuilding all ChatBubbles when only one is being streamed
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Save reference to provider to safely remove listener in dispose
+    if (_agentProvider == null) {
+      _agentProvider = Provider.of<AgentProvider>(context, listen: false);
+      _agentProvider!.streamingMessageNotifier.addListener(_onStreamingUpdate);
+    }
+  }
+
+  @override
+  void dispose() {
+    _agentProvider?.streamingMessageNotifier.removeListener(_onStreamingUpdate);
+    super.dispose();
+  }
+
+  void _onStreamingUpdate() {
+    final streamingMessage = _agentProvider?.streamingMessageNotifier.value;
+    // Only rebuild if this is the message being streamed OR if streaming was cleared
+    if (mounted && (streamingMessage?.id == widget.message.id || (_streamingMessage != null && streamingMessage == null))) {
+      setState(() {
+        _streamingMessage = streamingMessage;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isUser = widget.message.isUser;
     final colorScheme = Theme.of(context).colorScheme;
+    
+    // **PERFORMANCE FIX**: Use streaming message if available, otherwise use widget.message
+    final displayMessage = _streamingMessage ?? widget.message;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
@@ -70,11 +110,11 @@ class _ChatBubbleState extends State<ChatBubble> {
           children: [
             if (!isUser) ...[
               CircleAvatar(
-                backgroundColor: widget.message.isError
+                backgroundColor: displayMessage.isError
                     ? colorScheme.error
                     : colorScheme.primaryContainer,
                 child: Icon(
-                  widget.message.isError
+                  displayMessage.isError
                       ? Icons.error_outline
                       : Icons.smart_toy,
                   color: widget.message.isError
@@ -160,7 +200,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   MarkdownBody(
-                                    data: widget.message.content,
+                                    data: displayMessage.content,
                                     selectable: false,
                                     styleSheet: MarkdownStyleSheet.fromTheme(
                                             Theme.of(context))
@@ -225,7 +265,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                                     },
                                   ),
                                   // Show streaming indicator for partial messages
-                                  if (widget.message.isPartial) ...[
+                                  if (displayMessage.isPartial) ...[
                                     const SizedBox(height: 4),
                                     Row(
                                       children: [
@@ -240,7 +280,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          widget.message.content.isEmpty
+                                          displayMessage.content.isEmpty
                                               ? 'Thinking...'
                                               : 'Streaming...',
                                           style: (Theme.of(context)

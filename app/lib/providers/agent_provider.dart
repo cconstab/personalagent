@@ -34,10 +34,40 @@ class AgentProvider extends ChangeNotifier {
   /// Maximum messages per conversation to prevent unbounded growth
   static const int _maxMessagesPerConversation = 100;
 
+  /// **PERFORMANCE FIX**: Throttle UI updates during streaming
+  /// Prevents rebuilding the entire ListView on every chunk
+  Timer? _uiUpdateThrottle;
+  bool _hasPendingUpdate = false;
+  static const Duration _uiUpdateInterval = Duration(milliseconds: 100);
+
+  /// **PERFORMANCE FIX**: ValueNotifier for streaming message updates
+  /// Allows individual ChatBubble to listen without rebuilding entire ListView
+  final ValueNotifier<ChatMessage?> streamingMessageNotifier = ValueNotifier<ChatMessage?>(null);
+  String? _currentStreamingMessageId;
+
   /// Safely notify listeners immediately
   void _safeNotifyListeners() {
     if (!hasListeners) return;
     notifyListeners();
+  }
+
+  /// **PERFORMANCE FIX**: Throttled notify for streaming updates
+  /// Only rebuilds UI every 100ms instead of on every chunk
+  void _throttledNotifyListeners() {
+    if (!hasListeners) return;
+    
+    _hasPendingUpdate = true;
+    
+    // If throttle timer is already running, just mark pending
+    if (_uiUpdateThrottle?.isActive ?? false) return;
+    
+    // Start new throttle timer
+    _uiUpdateThrottle = Timer(_uiUpdateInterval, () {
+      if (_hasPendingUpdate) {
+        _hasPendingUpdate = false;
+        notifyListeners();
+      }
+    });
   }
 
   /// Start a timeout for a query - shows error if no response received
@@ -105,6 +135,13 @@ class AgentProvider extends ChangeNotifier {
       timer.cancel();
     }
     _queryTimeouts.clear();
+
+    // **PERFORMANCE FIX**: Cancel UI update throttle timer
+    _uiUpdateThrottle?.cancel();
+    _uiUpdateThrottle = null;
+
+    // **PERFORMANCE FIX**: Dispose streaming message notifier
+    streamingMessageNotifier.dispose();
 
     // Cancel the message stream subscription
     _messageStreamSubscription?.cancel();
@@ -234,8 +271,13 @@ class AgentProvider extends ChangeNotifier {
         }
 
         // Don't save to atPlatform yet (wait for final message)
-        // Just notify UI to update
-        _safeNotifyListeners();
+        // **PERFORMANCE FIX**: Notify only the specific streaming message
+        // This prevents rebuilding the entire ListView
+        _currentStreamingMessageId = message.id;
+        streamingMessageNotifier.value = message;
+        
+        // Still use throttled notify for scroll position updates
+        _throttledNotifyListeners();
       } else {
         // This is the final complete message
         debugPrint('📬 Received FINAL message ${message.id}');
@@ -273,6 +315,13 @@ class AgentProvider extends ChangeNotifier {
         conversation.updatedAt = DateTime.now(); // Refreshes TTL
         conversation.autoUpdateTitle();
         await _saveConversation(conversation); // Save to atPlatform with refreshed TTL
+
+        // **PERFORMANCE FIX**: Clear streaming notifier when final message arrives
+        // This removes the "Streaming..." indicator from the ChatBubble
+        if (_currentStreamingMessageId == message.id) {
+          streamingMessageNotifier.value = null;
+          _currentStreamingMessageId = null;
+        }
 
         // Clean up the mapping only after final message
         _queryToConversationMap.remove(message.id);
@@ -654,9 +703,16 @@ class AgentProvider extends ChangeNotifier {
       // Get conversation history (all messages except the current user message and thinking placeholder)
       final messages = currentConversation!.messages;
       // Exclude last 2 messages: the user message we just added and the thinking placeholder
-      final conversationHistory = messages.length > 2 ? messages.sublist(0, messages.length - 2) : <ChatMessage>[];
+      final allHistory = messages.length > 2 ? messages.sublist(0, messages.length - 2) : <ChatMessage>[];
+      
+      // **PERFORMANCE FIX**: Limit conversation history to last 10 messages (5 exchanges)
+      // Sending the entire conversation history slows down the app over time
+      const maxHistoryMessages = 10;
+      final conversationHistory = allHistory.length > maxHistoryMessages 
+          ? allHistory.sublist(allHistory.length - maxHistoryMessages)
+          : allHistory;
 
-      debugPrint('📝 Including ${conversationHistory.length} previous messages for context');
+      debugPrint('📝 Including ${conversationHistory.length} previous messages for context (limited from ${allHistory.length} total)');
 
       // If this is the first message in the conversation, prepend context as a system message
       List<ChatMessage> historyWithContext = conversationHistory;

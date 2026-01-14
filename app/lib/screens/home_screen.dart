@@ -141,25 +141,12 @@ class _HomeScreenState extends State<HomeScreen> {
     debugPrint('✅ Authenticated successfully with keychain as ${result.atsign}');
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
   void _sendMessage() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
     context.read<AgentProvider>().sendMessage(text);
     _textController.clear();
-    _scrollToBottom();
 
     // Request focus back to input field after sending
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -329,14 +316,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                _scrollToBottom();
-
                 return ListView.builder(
                   controller: _scrollController,
+                  reverse: true, // Build from bottom up like a chat app
                   padding: const EdgeInsets.all(16),
                   itemCount: agent.messages.length,
                   itemBuilder: (context, index) {
-                    final message = agent.messages[index];
+                    // Reverse the index since we're building from bottom
+                    final reversedIndex = agent.messages.length - 1 - index;
+                    final message = agent.messages[reversedIndex];
                     return ChatBubble(message: message);
                   },
                 );
