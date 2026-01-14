@@ -67,12 +67,13 @@ class AgentService {
   Future<void> _handleIncomingQuery(QueryMessage query) async {
     try {
       _logger.shout('[${query.id}] 📨 Query from ${query.userId}');
+      _logger.info('[${query.id}] 💬 Query: ${query.content}');
 
       // Warn if conversationId is missing - this should NEVER happen
       if (query.conversationId == null || query.conversationId!.isEmpty) {
         _logger.warning('[${query.id}] ⚠️ Query has NO conversationId! Response will be dropped by app!');
       } else {
-        _logger.fine('[${query.id}] 🔗 Query → conversation ${query.conversationId}');
+        _logger.info('[${query.id}] 🔗 Query → conversation ${query.conversationId}');
       }
 
       // Try to acquire mutex for this query (only one agent responds)
@@ -132,8 +133,8 @@ class AgentService {
       // Step 2: Analyze if we can answer locally with Ollama
       final analysis = await ollama.analyzeQuery(query: query.content, userContext: context);
 
-      _logger.fine(
-        'Analysis: canAnswerLocally=${analysis.canAnswerLocally}, '
+      _logger.info(
+        '[${query.id}] 📊 Analysis: canAnswerLocally=${analysis.canAnswerLocally}, '
         'confidence=${analysis.confidence.toStringAsFixed(2)}',
       );
 

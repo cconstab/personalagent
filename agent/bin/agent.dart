@@ -27,20 +27,32 @@ void main(List<String> arguments) async {
   // Parse command line arguments
   final parser = ArgParser()
     ..addFlag('help', abbr: 'h', help: 'Show this help message', negatable: false)
-    ..addFlag('verbose', abbr: 'v', help: 'Enable verbose logging', negatable: false)
+    ..addFlag('verbose', abbr: 'v', help: 'Enable verbose logging (queries, confidence, analysis)', negatable: false)
+    ..addFlag('veryVerbose', help: 'Enable very verbose logging (includes atSign SDK debug)', negatable: false)
     ..addOption('env', abbr: 'e', help: 'Path to .env file', defaultsTo: '.env')
     ..addOption('name', abbr: 'n', help: 'Agent name (displayed in responses)', defaultsTo: null);
 
   final results = parser.parse(arguments);
 
-  // Configure logging level based on verbose flag
+  // Determine verbosity level
   final verbose = results['verbose'] as bool;
-  Logger.root.level = verbose ? Level.ALL : Level.INFO;
+  final veryVerbose = results['veryVerbose'] as bool;
 
-  // Configure atPlatform SDK logging
-  // In normal mode: only SHOUT level (errors/critical)
-  // In verbose mode: INFO and above (more details)
-  AtSignLogger.root_level = verbose ? 'INFO' : 'SEVERE';
+  // Configure logging levels based on verbosity
+  // Normal mode: INFO level (high-level events only)
+  // -v mode: FINE level (queries, confidence, analysis)
+  // --veryVerbose mode: ALL (everything including internals)
+  if (veryVerbose) {
+    Logger.root.level = Level.ALL;
+    AtSignLogger.root_level = 'INFO'; // Show atSign SDK details
+  } else if (verbose) {
+    Logger.root.level = Level.FINE;
+    AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
+  } else {
+    Logger.root.level = Level.INFO;
+    AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
+  }
+
   AtSignLogger.defaultLoggingHandler = AtSignLogger.stdErrLoggingHandler;
 
   if (results['help']) {
