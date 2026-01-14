@@ -20,12 +20,10 @@ class AtPlatformService {
   bool _isInitialized = false;
 
   // Store active stream channels for each connected user
-  final Map<String, AtNotificationStreamChannel<String, String>>
-  _activeChannels = {};
+  final Map<String, AtNotificationStreamChannel<String, String>> _activeChannels = {};
 
   // Store query-specific channels (key: queryId)
-  final Map<String, AtNotificationStreamChannel<String, String>>
-  _queryChannels = {};
+  final Map<String, AtNotificationStreamChannel<String, String>> _queryChannels = {};
 
   AtPlatformService({
     required this.atSign,
@@ -88,9 +86,7 @@ class AtPlatformService {
       // CRITICAL: Set fetchOfflineNotifications to false to ignore old notifications
       // This prevents processing stale queries that accumulated while agent was offline
       _atClient!.getPreferences()!.fetchOfflineNotifications = false;
-      _logger.fine(
-        '📅 Configured to fetch ONLY new notifications (ignore offline backlog)',
-      );
+      _logger.fine('📅 Configured to fetch ONLY new notifications (ignore offline backlog)');
 
       _isInitialized = true;
 
@@ -177,26 +173,19 @@ class AtPlatformService {
   }
 
   /// Subscribe to incoming messages from Flutter app
-  Future<void> subscribeToMessages(
-    Future<void> Function(QueryMessage) onQueryReceived,
-  ) async {
+  Future<void> subscribeToMessages(Future<void> Function(QueryMessage) onQueryReceived) async {
     _ensureInitialized();
 
     _logger.fine('🔔 Setting up notification listener');
     _logger.fine('   AtClient: ${_atClient != null ? "initialized" : "NULL"}');
-    _logger.fine(
-      '   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}',
-    );
+    _logger.fine('   NotificationService: ${_atClient?.notificationService != null ? "available" : "NULL"}');
 
     try {
       // Subscribe with same pattern as at_talk - this makes auto-decryption work!
       _logger.fine('📡 Subscribing with regex: query.personalagent@');
       _logger.fine('   (Following at_talk_gui pattern for auto-decryption)');
 
-      final stream = _atClient!.notificationService.subscribe(
-        regex: 'query.personalagent@',
-        shouldDecrypt: true,
-      );
+      final stream = _atClient!.notificationService.subscribe(regex: 'query.personalagent@', shouldDecrypt: true);
 
       _logger.fine('✅ Subscribe call completed, got stream');
 
@@ -236,35 +225,24 @@ class AtPlatformService {
 
             // Parse as QueryMessage
             final useOllamaOnly = jsonData['useOllamaOnly'] ?? false;
-            final conversationHistory =
-                jsonData['conversationHistory'] as List<dynamic>?;
+            final conversationHistory = jsonData['conversationHistory'] as List<dynamic>?;
             final streamSessionId = jsonData['streamSessionId'] as String?;
 
             final query = QueryMessage(
-              id:
-                  jsonData['id'] ??
-                  DateTime.now().millisecondsSinceEpoch.toString(),
+              id: jsonData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
               content: jsonData['content'] ?? '',
               userId: jsonData['userId'] ?? notification.from ?? '',
               useOllamaOnly: useOllamaOnly,
-              conversationHistory: conversationHistory
-                  ?.cast<Map<String, dynamic>>(),
+              conversationHistory: conversationHistory?.cast<Map<String, dynamic>>(),
               conversationId: jsonData['conversationId'] as String?,
               streamSessionId: streamSessionId, // Stream session ID for routing
-              notificationId:
-                  notification.id, // CRITICAL: Use notification ID for mutex
-              timestamp: DateTime.parse(
-                jsonData['timestamp'] ?? DateTime.now().toIso8601String(),
-              ),
+              notificationId: notification.id, // CRITICAL: Use notification ID for mutex
+              timestamp: DateTime.parse(jsonData['timestamp'] ?? DateTime.now().toIso8601String()),
             );
 
             _logger.info('[${query.id}] ⚡ Processing query');
-            _logger.info(
-              '[${query.id}]    Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}',
-            );
-            _logger.info(
-              '[${query.id}]    Conversation History: ${conversationHistory?.length ?? 0} messages',
-            );
+            _logger.info('[${query.id}]    Ollama-Only Mode: ${useOllamaOnly ? "ENABLED 🔒" : "disabled"}');
+            _logger.info('[${query.id}]    Conversation History: ${conversationHistory?.length ?? 0} messages');
             _logger.info(
               '[${query.id}]    Content: ${query.content.substring(0, query.content.length > 50 ? 50 : query.content.length)}...',
             );
@@ -304,18 +282,14 @@ class AtPlatformService {
   /// Check if we have a stream channel for the given recipient
   /// Used to determine if this agent instance should respond to a query
   bool hasStreamChannel(String recipientAtSign, {String? streamSessionId}) {
-    _logger.fine(
-      '🔍 Checking stream channel for $recipientAtSign (sessionId: $streamSessionId)',
-    );
+    _logger.fine('🔍 Checking stream channel for $recipientAtSign (sessionId: $streamSessionId)');
     _logger.fine('   Active channels: ${_activeChannels.length}');
 
     if (streamSessionId != null) {
       // Check if we have a channel with this session ID
       _logger.fine('   Looking for sessionId: $streamSessionId');
       for (final entry in _activeChannels.entries) {
-        _logger.fine(
-          '   Channel ${entry.key}: sessionId = ${entry.value.sessionId}',
-        );
+        _logger.fine('   Channel ${entry.key}: sessionId = ${entry.value.sessionId}');
         if (entry.value.sessionId == streamSessionId) {
           _logger.fine('   ✅ MATCH! This agent has the channel');
           return true;
@@ -332,11 +306,7 @@ class AtPlatformService {
   }
 
   /// Send response via stream channel (stream-only, requires sessionId)
-  Future<void> sendStreamResponse(
-    String recipientAtSign,
-    ResponseMessage response, {
-    String? streamSessionId,
-  }) async {
+  Future<void> sendStreamResponse(String recipientAtSign, ResponseMessage response, {String? streamSessionId}) async {
     _ensureInitialized();
 
     // Try to find the stream channel for this recipient
@@ -354,16 +324,10 @@ class AtPlatformService {
       }
 
       if (channel == null) {
-        _logger.warning(
-          'No active stream channel with session ID: $streamSessionId',
-        );
-        final availableSessions = _activeChannels.values
-            .map((ch) => ch.sessionId)
-            .join(", ");
+        _logger.warning('No active stream channel with session ID: $streamSessionId');
+        final availableSessions = _activeChannels.values.map((ch) => ch.sessionId).join(", ");
         _logger.warning('Available sessions: $availableSessions');
-        throw Exception(
-          'No active stream channel for session $streamSessionId',
-        );
+        throw Exception('No active stream channel for session $streamSessionId');
       }
       _logger.fine('📍 Found channel by session ID: $streamSessionId');
     } else {
@@ -396,9 +360,7 @@ class AtPlatformService {
           errorString.contains('network') ||
           errorString.contains('remote atsign not found') ||
           errorString.contains('full response not received')) {
-        _logger.warning(
-          '⚠️ Network/timeout error sending to $recipientAtSign - client may retry',
-        );
+        _logger.warning('⚠️ Network/timeout error sending to $recipientAtSign - client may retry');
         // Don't rethrow - this is expected when network is down
         return;
       }
@@ -438,24 +400,15 @@ class AtPlatformService {
       // Use PutRequestOptions to ensure operation happens on remote server
       final putOptions = PutRequestOptions()
         ..shouldEncrypt = false
-        ..useRemoteAtServer =
-            true; // Critical: ensures all agents check same server
+        ..useRemoteAtServer = true; // Critical: ensures all agents check same server
 
       try {
-        await _atClient!.put(
-          mutexKey,
-          agentName,
-          putRequestOptions: putOptions,
-        );
-        _logger.shout(
-          '� Acquired mutex for query $id; will handle this request',
-        );
+        await _atClient!.put(mutexKey, agentName, putRequestOptions: putOptions);
+        _logger.shout('� Acquired mutex for query $id; will handle this request');
         return true;
       } catch (err) {
         if (err.toString().toLowerCase().contains('immutable')) {
-          _logger.shout(
-            '🤷‍♂️ Did not acquire mutex for query $id; another agent will handle this',
-          );
+          _logger.shout('🤷‍♂️ Did not acquire mutex for query $id; another agent will handle this');
           return false;
         } else {
           _logger.warning('Unexpected error acquiring mutex: $err');
@@ -469,23 +422,16 @@ class AtPlatformService {
   }
 
   /// Connect to query-specific response stream and send response
-  Future<void> sendStreamResponseToQuery(
-    String recipientAtSign,
-    String queryId,
-    ResponseMessage response,
-  ) async {
+  Future<void> sendStreamResponseToQuery(String recipientAtSign, String queryId, ResponseMessage response) async {
     _ensureInitialized();
 
     try {
       // Check if we already have a channel for this query
-      AtNotificationStreamChannel<String, String>? channel =
-          _queryChannels[queryId];
+      AtNotificationStreamChannel<String, String>? channel = _queryChannels[queryId];
 
       if (channel == null) {
         // First message for this query - establish connection
-        _logger.info(
-          '[${queryId}] 🔗 Connecting to query-specific stream: response.$queryId',
-        );
+        _logger.info('[${queryId}] 🔗 Connecting to query-specific stream: response.$queryId');
 
         channel = await AtNotificationStreamChannel.connect<String, String>(
           _atClient!,
@@ -504,9 +450,7 @@ class AtPlatformService {
       // Send the response through the existing/cached channel
       final jsonData = json.encode(response.toJson());
       channel.sink.add(jsonData);
-      _logger.fine(
-        '📤 Sent response for query $queryId (isPartial: ${response.isPartial})',
-      );
+      _logger.fine('📤 Sent response for query $queryId (isPartial: ${response.isPartial})');
 
       // If this is the final message, send disconnect and cleanup
       if (!response.isPartial) {
@@ -525,11 +469,7 @@ class AtPlatformService {
         _logger.info('[${queryId}] ✅ Completed query, cleaned up channel');
       }
     } catch (e, stackTrace) {
-      _logger.severe(
-        '[${queryId}] Failed to send response to query stream',
-        e,
-        stackTrace,
-      );
+      _logger.severe('[${queryId}] Failed to send response to query stream', e, stackTrace);
 
       // Remove channel from cache - it's likely invalid now
       _queryChannels.remove(queryId);
@@ -542,9 +482,7 @@ class AtPlatformService {
           errorString.contains('network') ||
           errorString.contains('remote atsign not found') ||
           errorString.contains('full response not received')) {
-        _logger.warning(
-          '[${queryId}] ⚠️ Network/timeout error - client may retry',
-        );
+        _logger.warning('[${queryId}] ⚠️ Network/timeout error - client may retry');
         // Don't rethrow - this is expected when network is down
         // The calling code already has error handling for this
         return;
@@ -587,9 +525,7 @@ class AtPlatformService {
             (data) {
               // Could handle control messages here in the future
               // For now, just ignore incoming data on the general stream
-              _logger.fine(
-                '📥 Received data from $fromAtSign: ${data.substring(0, 50)}...',
-              );
+              _logger.fine('📥 Received data from $fromAtSign: ${data.substring(0, 50)}...');
             },
             onDone: () {
               _logger.info('🔌 Disconnected: $fromAtSign');
@@ -620,9 +556,7 @@ class AtPlatformService {
 
   void _ensureInitialized() {
     if (!_isInitialized) {
-      throw Exception(
-        'AtPlatformService not initialized. Call initialize() first.',
-      );
+      throw Exception('AtPlatformService not initialized. Call initialize() first.');
     }
   }
 

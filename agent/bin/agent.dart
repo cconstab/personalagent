@@ -37,8 +37,10 @@ void main(List<String> arguments) async {
   final verbose = results['verbose'] as bool;
   Logger.root.level = verbose ? Level.ALL : Level.INFO;
 
-  // Configure atPlatform SDK logging (like sshnpd does)
-  AtSignLogger.root_level = verbose ? 'INFO' : 'SHOUT';
+  // Configure atPlatform SDK logging
+  // In normal mode: only SHOUT level (errors/critical)
+  // In verbose mode: INFO and above (more details)
+  AtSignLogger.root_level = verbose ? 'INFO' : 'SEVERE';
   AtSignLogger.defaultLoggingHandler = AtSignLogger.stdErrLoggingHandler;
 
   if (results['help']) {
