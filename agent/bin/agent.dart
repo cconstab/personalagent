@@ -52,9 +52,11 @@ void main(List<String> arguments) async {
   if (veryVerbose) {
     Logger.root.level = Level.ALL;
     AtSignLogger.root_level = 'INFO'; // Show atSign SDK details
+    print('🐛 Debug mode: Logger.root.level = ${Logger.root.level.name}');
   } else if (verbose) {
     Logger.root.level = Level.FINE;
     AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
+    print('🔍 Verbose mode: Logger.root.level = ${Logger.root.level.name}');
   } else {
     Logger.root.level = Level.INFO;
     AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
