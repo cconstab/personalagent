@@ -201,26 +201,28 @@ class OllamaService {
     final analysisPrompt = '''
 Analyze this query: "$query"
 
-Can you answer this with:
-1. Your built-in general knowledge (facts, common knowledge, definitions)
-2. The provided context below (if any)
+Can you answer this using your built-in general knowledge and the provided context?
 
 Available Context:
 $userContext
 
 Guidelines:
-- General knowledge questions = canAnswerLocally: true, high confidence (0.8-1.0)
-- Current events or real-time data = canAnswerLocally: false, low confidence (0.2-0.4)
-- Personal user data = use provided context
+- General knowledge questions (science, history, definitions): canAnswerLocally=true, confidence 0.8-1.0
+- Current events after 2023 or real-time data: canAnswerLocally=false, confidence 0.1-0.3
+- Questions needing specific external resources: canAnswerLocally=false, confidence 0.3-0.5
+- Ambiguous or uncertain topics: moderate confidence 0.5-0.7
 
-Respond in JSON format:
+Respond in valid JSON format with these exact fields.
+
+Example JSON (adjust values based on your analysis):
 {
-  "canAnswerLocally": true,
-  "confidence": 1.0,
-  "reasoningRequired": "General knowledge question",
-  "externalKnowledgeNeeded": null
+  "canAnswerLocally": true or false,
+  "confidence": decimal between 0.0 and 1.0,
+  "reasoningRequired": "brief explanation of your decision",
+  "externalKnowledgeNeeded": "what's needed if false, or null"
 }
-''';
+
+Your JSON response:''';
 
     try {
       final response = await generate(
