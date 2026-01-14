@@ -11,13 +11,20 @@ import 'package:personal_agent/services/claude_service.dart';
 void main(List<String> arguments) async {
   // Setup logging (level will be set after parsing args)
   Logger.root.onRecord.listen((record) {
-    // Simple format for non-verbose mode
-    if (record.level == Level.INFO) {
+    // Format based on log level
+    // SHOUT and SEVERE: always show with level prefix
+    if (record.level >= Level.SHOUT) {
+      print('${record.level.name}: ${record.time}: ${record.message}');
+    } 
+    // INFO: simple format (clean output)
+    else if (record.level == Level.INFO) {
       print(record.message);
-    } else {
-      // Detailed format for verbose mode
+    }
+    // FINE and below: detailed format (verbose mode)
+    else {
       print('${record.level.name}: ${record.time}: ${record.message}');
     }
+    
     if (record.error != null) print('Error: ${record.error}');
     if (record.stackTrace != null) print('Stack: ${record.stackTrace}');
   });
