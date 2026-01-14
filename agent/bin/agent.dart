@@ -59,11 +59,11 @@ void main(List<String> arguments) async {
     print('🐛 Debug mode: Logger.root.level = ${Logger.root.level.name}');
   } else if (verbose) {
     AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
-    Logger.root.level = Level.FINE;
+    Logger.root.level = Level.INFO; // Show queries, confidence, analysis
     print('🔍 Verbose mode: Logger.root.level = ${Logger.root.level.name}');
   } else {
     AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
-    Logger.root.level = Level.INFO;
+    Logger.root.level = Level.SHOUT; // Only show critical events
   }
 
   if (results['help']) {
