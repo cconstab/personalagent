@@ -277,7 +277,7 @@ Respond naturally and conversationally.
             chunkIndex: chunkIndex++,
           );
 
-          _logger.info('[${query.id}] 📤 Sending PARTIAL chunk #$chunkIndex (${fullResponse.length} chars)');
+          _logger.fine('[${query.id}] 📤 Sending PARTIAL chunk #$chunkIndex (${fullResponse.length} chars)');
 
           // Send chunk and await to ensure it completes
           // This maintains channel caching and prevents errors

@@ -510,7 +510,7 @@ class AtPlatformService {
 
       // If this is the final message, send disconnect and cleanup
       if (!response.isPartial) {
-        _logger.info('[${queryId}] 🏁 Sending final message, will disconnect');
+        _logger.fine('[${queryId}] 🏁 Sending final message, will disconnect');
 
         // Give a brief moment for the message to be sent
         await Future.delayed(const Duration(milliseconds: 100));
