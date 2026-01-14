@@ -230,7 +230,7 @@ Respond in JSON format:
       }
 
       final jsonText = jsonMatch.group(0)!;
-      _logger.fine('📊 Ollama analysis JSON: $jsonText');
+      _logger.info('📊 Ollama analysis JSON: $jsonText');
       
       final analysisData = json.decode(jsonText);
       
