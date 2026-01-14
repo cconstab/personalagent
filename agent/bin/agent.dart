@@ -15,7 +15,7 @@ void main(List<String> arguments) async {
     // SHOUT and SEVERE: always show with level prefix
     if (record.level >= Level.SHOUT) {
       print('${record.level.name}: ${record.time}: ${record.message}');
-    } 
+    }
     // INFO: simple format (clean output)
     else if (record.level == Level.INFO) {
       print(record.message);
@@ -24,7 +24,7 @@ void main(List<String> arguments) async {
     else {
       print('${record.level.name}: ${record.time}: ${record.message}');
     }
-    
+
     if (record.error != null) print('Error: ${record.error}');
     if (record.stackTrace != null) print('Stack: ${record.stackTrace}');
   });
@@ -49,20 +49,22 @@ void main(List<String> arguments) async {
   // Normal mode: INFO level (high-level events only)
   // -v mode: FINE level (queries, confidence, analysis)
   // --veryVerbose mode: ALL (everything including internals)
+
+  // First configure atSign SDK logging
+  AtSignLogger.defaultLoggingHandler = AtSignLogger.stdErrLoggingHandler;
+
   if (veryVerbose) {
-    Logger.root.level = Level.ALL;
     AtSignLogger.root_level = 'INFO'; // Show atSign SDK details
+    Logger.root.level = Level.ALL;
     print('🐛 Debug mode: Logger.root.level = ${Logger.root.level.name}');
   } else if (verbose) {
-    Logger.root.level = Level.FINE;
     AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
+    Logger.root.level = Level.FINE;
     print('🔍 Verbose mode: Logger.root.level = ${Logger.root.level.name}');
   } else {
-    Logger.root.level = Level.INFO;
     AtSignLogger.root_level = 'SEVERE'; // Hide atSign SDK spam
+    Logger.root.level = Level.INFO;
   }
-
-  AtSignLogger.defaultLoggingHandler = AtSignLogger.stdErrLoggingHandler;
 
   if (results['help']) {
     print('Private AI Agent with atPlatform');
