@@ -183,30 +183,49 @@ class OllamaService {
   Future<AnalysisResult> analyzeQuery({required String query, required String userContext}) async {
     final analysisPrompt =
         '''
-Analyze this query: "$query"
+TASK: Evaluate if you can provide a complete, accurate answer to this query using ONLY your built-in knowledge.
 
-Can you answer this using your built-in general knowledge and the provided context?
+QUERY: "$query"
 
-Available Context:
+AVAILABLE USER CONTEXT:
 $userContext
 
-Guidelines:
-- General knowledge questions (science, history, definitions): canAnswerLocally=true, confidence 0.8-1.0
-- Current events after 2023 or real-time data: canAnswerLocally=false, confidence 0.1-0.3
-- Questions needing specific external resources: canAnswerLocally=false, confidence 0.3-0.5
-- Ambiguous or uncertain topics: moderate confidence 0.5-0.7
+EVALUATION STEPS:
 
-Respond in valid JSON format with these exact fields.
+1. Does the query contain ambiguous references?
+   - Pronouns without clear antecedents (it, that, this, them)?
+   - Vague references requiring conversation history?
+   → If YES: confidence ≤ 0.4
 
-Example JSON (adjust values based on your analysis):
+2. Does the query require current/recent information?
+   - News, events, or data from 2024 onwards?
+   - Current prices, weather, or real-time status?
+   → If YES: canAnswerLocally = false, confidence ≤ 0.3
+
+3. Is this general knowledge you definitely know?
+   - Science, history, geography, definitions?
+   - Well-established facts?
+   → If YES: canAnswerLocally = true, confidence ≥ 0.85
+
+4. Is the question clear but you're uncertain about accuracy?
+   - Might need verification?
+   - Could be outdated knowledge?
+   → confidence = 0.5-0.7
+
+CONFIDENCE SCALE:
+- 0.9-1.0: Certain I can answer completely and accurately
+- 0.7-0.9: Confident, but might miss some nuance
+- 0.5-0.7: Can attempt but uncertain about accuracy
+- 0.3-0.5: Ambiguous or might need external sources
+- 0.0-0.3: Definitely need external knowledge or current data
+
+Respond with ONLY valid JSON (no explanation):
 {
   "canAnswerLocally": true or false,
-  "confidence": decimal between 0.0 and 1.0,
-  "reasoningRequired": "brief explanation of your decision",
+  "confidence": 0.0 to 1.0,
+  "reasoningRequired": "one sentence explaining your confidence level",
   "externalKnowledgeNeeded": "what's needed if false, or null"
-}
-
-Your JSON response:''';
+}''';
 
     try {
       final response = await generate(
