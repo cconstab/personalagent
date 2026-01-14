@@ -199,20 +199,26 @@ class OllamaService {
     required String userContext,
   }) async {
     final analysisPrompt = '''
-Analyze this query and determine if it can be answered with the provided context alone, 
-or if external knowledge is needed.
+Analyze this query: "$query"
 
-Query: $query
+Can you answer this with:
+1. Your built-in general knowledge (facts, common knowledge, definitions)
+2. The provided context below (if any)
 
 Available Context:
 $userContext
 
+Guidelines:
+- General knowledge questions = canAnswerLocally: true, high confidence (0.8-1.0)
+- Current events or real-time data = canAnswerLocally: false, low confidence (0.2-0.4)
+- Personal user data = use provided context
+
 Respond in JSON format:
 {
-  "canAnswerLocally": true/false,
-  "confidence": 0.0-1.0,
-  "reasoningRequired": "brief explanation",
-  "externalKnowledgeNeeded": "what type of knowledge is needed, if any"
+  "canAnswerLocally": true,
+  "confidence": 1.0,
+  "reasoningRequired": "General knowledge question",
+  "externalKnowledgeNeeded": null
 }
 ''';
 
