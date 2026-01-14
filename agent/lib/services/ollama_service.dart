@@ -225,16 +225,25 @@ Respond in JSON format:
       // Parse JSON from response
       final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(response.response);
       if (jsonMatch == null) {
+        _logger.warning('⚠️ No JSON found in Ollama analysis response: ${response.response}');
         throw Exception('Could not parse analysis response');
       }
 
-      final analysisData = json.decode(jsonMatch.group(0)!);
-      return AnalysisResult(
+      final jsonText = jsonMatch.group(0)!;
+      _logger.fine('📊 Ollama analysis JSON: $jsonText');
+      
+      final analysisData = json.decode(jsonText);
+      
+      final result = AnalysisResult(
         canAnswerLocally: analysisData['canAnswerLocally'] ?? false,
         confidence: (analysisData['confidence'] ?? 0.5).toDouble(),
         reasoning: analysisData['reasoningRequired'] ?? '',
         externalKnowledgeNeeded: analysisData['externalKnowledgeNeeded'],
       );
+      
+      _logger.info('📊 Analysis result: canAnswer=${result.canAnswerLocally}, confidence=${result.confidence.toStringAsFixed(2)}, reason=${result.reasoning}');
+      
+      return result;
     } catch (e, stackTrace) {
       _logger.warning(
           'Failed to analyze query, defaulting to local', e, stackTrace);
