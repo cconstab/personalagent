@@ -15,6 +15,42 @@ class OllamaService {
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
+  /// Check if Ollama is running and the model is available
+  Future<bool> healthCheck() async {
+    try {
+      // Check if Ollama server is running
+      final response = await _httpClient.get(Uri.parse('$host/api/tags'));
+      
+      if (response.statusCode != 200) {
+        _logger.warning('Ollama server not accessible at $host');
+        return false;
+      }
+
+      // Check if the model exists
+      final data = json.decode(response.body);
+      final models = data['models'] as List<dynamic>?;
+      
+      if (models == null) {
+        _logger.warning('Unable to get model list from Ollama');
+        return false;
+      }
+
+      final modelExists = models.any((m) => m['name']?.toString().startsWith(model) ?? false);
+      
+      if (!modelExists) {
+        _logger.warning('Model "$model" not found in Ollama. Available models: ${models.map((m) => m['name']).join(', ')}');
+        _logger.warning('Run: ollama pull $model');
+        return false;
+      }
+
+      _logger.info('✅ Ollama health check passed - model "$model" is available');
+      return true;
+    } catch (e) {
+      _logger.warning('Ollama health check failed: $e');
+      return false;
+    }
+  }
+
   /// Generate a response from Ollama (non-streaming)
   Future<OllamaResponse> generate({
     required String prompt,
@@ -95,7 +131,27 @@ class OllamaService {
       final streamedResponse = await _httpClient.send(request);
 
       if (streamedResponse.statusCode != 200) {
-        throw Exception('Ollama API error: ${streamedResponse.statusCode}');
+        String errorMsg = 'Ollama API error: ${streamedResponse.statusCode}';
+        
+        // Provide helpful error messages
+        if (streamedResponse.statusCode == 404) {
+          errorMsg += '\n   Model "$model" not found. Please pull it first with: ollama pull $model';
+          errorMsg += '\n   Or check if Ollama is running at: $host';
+        } else if (streamedResponse.statusCode >= 500) {
+          errorMsg += '\n   Ollama server error. Check if Ollama is running properly.';
+        }
+        
+        // Try to read error body for more details
+        try {
+          final errorBody = await streamedResponse.stream.bytesToString();
+          if (errorBody.isNotEmpty) {
+            errorMsg += '\n   Details: $errorBody';
+          }
+        } catch (_) {
+          // Ignore if we can't read the error body
+        }
+        
+        throw Exception(errorMsg);
       }
 
       // Ollama streaming returns newline-delimited JSON objects

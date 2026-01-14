@@ -15,6 +15,43 @@ class ClaudeService {
   ClaudeService({required this.apiKey, this.model = 'claude-3-5-sonnet-20241022', http.Client? httpClient})
     : _httpClient = httpClient ?? http.Client();
 
+  /// Check if Claude API is accessible and credentials are valid
+  Future<bool> healthCheck() async {
+    try {
+      // Make a minimal request to verify API key and connectivity
+      final response = await _httpClient.post(
+        Uri.parse(_apiUrl),
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': _apiVersion,
+          'content-type': 'application/json',
+        },
+        body: json.encode({
+          'model': model,
+          'max_tokens': 10,
+          'messages': [{'role': 'user', 'content': 'test'}],
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        _logger.info('✅ Claude API health check passed');
+        return true;
+      } else if (response.statusCode == 401) {
+        _logger.warning('❌ Claude API key is invalid or expired');
+        return false;
+      } else if (response.statusCode == 404) {
+        _logger.warning('❌ Claude model "$model" not found or not accessible');
+        return false;
+      } else {
+        _logger.warning('⚠️  Claude API returned status: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      _logger.warning('Claude health check failed: $e');
+      return false;
+    }
+  }
+
   /// Query Claude with sanitized input (no personal information) - non-streaming
   Future<ClaudeResponse> query({required String sanitizedQuery, double temperature = 0.7, int maxTokens = 1024}) async {
     try {
@@ -81,7 +118,34 @@ class ClaudeService {
       final streamedResponse = await _httpClient.send(request);
 
       if (streamedResponse.statusCode != 200) {
-        throw Exception('Claude API error: ${streamedResponse.statusCode}');
+        String errorMsg = 'Claude API error: ${streamedResponse.statusCode}';
+        
+        // Provide helpful error messages
+        if (streamedResponse.statusCode == 401) {
+          errorMsg += '\n   Invalid or expired API key. Please check your CLAUDE_API_KEY.';
+        } else if (streamedResponse.statusCode == 404) {
+          errorMsg += '\n   Model "$model" not found or not accessible.';
+          errorMsg += '\n   Check if the model name is correct in CLAUDE_MODEL.';
+        } else if (streamedResponse.statusCode == 429) {
+          errorMsg += '\n   Rate limit exceeded. Please wait before retrying.';
+        } else if (streamedResponse.statusCode >= 500) {
+          errorMsg += '\n   Claude API server error. Please try again later.';
+        }
+        
+        // Try to read error body for more details
+        try {
+          final errorBody = await streamedResponse.stream.bytesToString();
+          if (errorBody.isNotEmpty) {
+            final errorData = json.decode(errorBody);
+            if (errorData['error']?['message'] != null) {
+              errorMsg += '\n   Details: ${errorData['error']['message']}';
+            }
+          }
+        } catch (_) {
+          // Ignore if we can't read the error body
+        }
+        
+        throw Exception(errorMsg);
       }
 
       // Claude streaming returns Server-Sent Events (SSE) format

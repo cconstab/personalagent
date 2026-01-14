@@ -107,7 +107,39 @@ void main(List<String> arguments) async {
 
     final ollama = OllamaService(host: ollamaHost, model: ollamaModel);
 
+    // Check Ollama availability
+    logger.info('🔍 Checking Ollama availability...');
+    final ollamaAvailable = await ollama.healthCheck();
+    if (!ollamaAvailable) {
+      logger.warning('⚠️  Ollama is not available or model "$ollamaModel" is not installed');
+      logger.warning('   Make sure Ollama is running and the model is pulled:');
+      logger.warning('   ollama pull $ollamaModel');
+      if (claudeApiKey.isEmpty) {
+        logger.severe('❌ No fallback available - Claude is not configured');
+        exit(1);
+      }
+      logger.warning('   Will use Claude as fallback');
+    }
+
     final claude = claudeApiKey.isNotEmpty ? ClaudeService(apiKey: claudeApiKey, model: claudeModel) : null;
+
+    // Check Claude availability if configured
+    if (claude != null) {
+      logger.info('🔍 Checking Claude API availability...');
+      final claudeAvailable = await claude.healthCheck();
+      if (!claudeAvailable) {
+        logger.warning('⚠️  Claude API is not accessible');
+        logger.warning('   Check your CLAUDE_API_KEY and model configuration');
+        if (!ollamaAvailable) {
+          logger.severe('❌ Neither Ollama nor Claude is available - cannot process queries');
+          exit(1);
+        }
+        logger.warning('   Will use Ollama only');
+      }
+    } else if (!ollamaAvailable) {
+      logger.severe('❌ Neither Ollama nor Claude is configured/available');
+      exit(1);
+    }
 
     // Use agent name if provided, otherwise use the atSign as the agent name
     final effectiveAgentName = agentName.isNotEmpty ? agentName : atSign;
