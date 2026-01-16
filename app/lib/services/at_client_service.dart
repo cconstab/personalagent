@@ -76,8 +76,7 @@ class AtClientService {
 
       // Check if SDK is using wrong @sign
       if (currentAtSign != null && currentAtSign != atSign) {
-        throw Exception(
-            'SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
+        throw Exception('SDK initialized with wrong @sign: $currentAtSign (expected $atSign)');
       }
 
       if (currentAtSign != null) {
@@ -85,8 +84,7 @@ class AtClientService {
         _atClient = manager.atClient;
       } else {
         // This shouldn't happen after successful onboarding
-        throw Exception(
-            'AtClient not initialized. Onboarding may not have completed successfully.');
+        throw Exception('AtClient not initialized. Onboarding may not have completed successfully.');
       }
     } catch (e, stackTrace) {
       debugPrint('❌ Failed to initialize AtClientService: $e');
@@ -105,8 +103,7 @@ class AtClientService {
     ChatMessage message, {
     bool useOllamaOnly = false,
     List<ChatMessage>? conversationHistory,
-    required String
-        conversationId, // NOW REQUIRED - messages must belong to a conversation
+    required String conversationId, // NOW REQUIRED - messages must belong to a conversation
   }) async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized. Call initialize() first.');
@@ -143,8 +140,7 @@ class AtClientService {
         responseChannel.stream.listen(
           (String responseJson) {
             try {
-              final responseData =
-                  json.decode(responseJson) as Map<String, dynamic>;
+              final responseData = json.decode(responseJson) as Map<String, dynamic>;
 
               // Check for control messages (disconnect, etc.) and ignore them
               if (responseData.containsKey('control')) {
@@ -161,8 +157,7 @@ class AtClientService {
               }
 
               final responseMessage = ChatMessage(
-                id: responseData['id'] ??
-                    DateTime.now().millisecondsSinceEpoch.toString(),
+                id: responseData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
                 content: responseData['content'] ?? '',
                 isUser: false,
                 timestamp: DateTime.parse(
@@ -179,8 +174,7 @@ class AtClientService {
 
               // Log when we receive the final response
               if (responseMessage.isPartial == false) {
-                _logger.info(
-                    '✅ Received complete response from ${responseMessage.agentName ?? "agent"}');
+                _logger.info('✅ Received complete response from ${responseMessage.agentName ?? "agent"}');
 
                 // Clean up subscription when final message received
                 _querySubscriptions[queryId]?.cancel();
@@ -206,8 +200,12 @@ class AtClientService {
         );
       });
 
-      debugPrint(
-          '✅ Response channel bound for query $queryId, ready for agent connection');
+      debugPrint('✅ Response channel bound for query $queryId, ready for agent connection');
+
+      // Give the bind listener a moment to fully initialize
+      // This prevents race condition where agent connects before app is ready
+      await Future.delayed(const Duration(milliseconds: 100));
+      debugPrint('✅ Bind listener ready, sending query notification');
 
       // Build conversation context from history
       final List<Map<String, dynamic>> context = [];
@@ -230,8 +228,7 @@ class AtClientService {
         'timestamp': message.timestamp.toIso8601String(),
         'useOllamaOnly': useOllamaOnly,
         'conversationHistory': context, // Include conversation context
-        'conversationId':
-            conversationId, // Include conversation ID for response routing (ALWAYS required)
+        'conversationId': conversationId, // Include conversation ID for response routing (ALWAYS required)
       };
 
       // Send as notification with same pattern as at_talk
@@ -239,8 +236,7 @@ class AtClientService {
         ..isPublic = false
         ..isEncrypted = true
         ..namespaceAware = true
-        ..ttl =
-            300000; // 5 minutes (300 seconds) - queries expire if agent offline
+        ..ttl = 300000; // 5 minutes (300 seconds) - queries expire if agent offline
 
       final atKey = AtKey()
         ..key = 'query'
@@ -259,8 +255,7 @@ class AtClientService {
       );
 
       _logger.info('📤 Sent query to $_agentAtSign');
-      debugPrint(
-          '📤 Query notification sent, agent will connect to response.$queryId stream');
+      debugPrint('📤 Query notification sent, agent will connect to response.$queryId stream');
     } catch (e, stackTrace) {
       debugPrint('Failed to send query: $e');
       debugPrint('StackTrace: $stackTrace');
@@ -298,8 +293,7 @@ class AtClientService {
       }
 
       // Connect to agent's stream channel
-      _responseStreamChannel =
-          await AtNotificationStreamChannel.connect<String, String>(
+      _responseStreamChannel = await AtNotificationStreamChannel.connect<String, String>(
         _atClient!,
         otherAtsign: _agentAtSign!,
         baseNamespace: 'personalagent',
@@ -317,19 +311,16 @@ class AtClientService {
         (String responseJson) {
           try {
             // Parse JSON response
-            final responseData =
-                json.decode(responseJson) as Map<String, dynamic>;
+            final responseData = json.decode(responseJson) as Map<String, dynamic>;
 
             // Ignore ping/pong messages (no longer used for heartbeat)
-            if (responseData['type'] == 'ping' ||
-                responseData['type'] == 'pong') {
+            if (responseData['type'] == 'ping' || responseData['type'] == 'pong') {
               return;
             }
 
             // Convert response data to ChatMessage
             final message = ChatMessage(
-              id: responseData['id'] ??
-                  DateTime.now().millisecondsSinceEpoch.toString(),
+              id: responseData['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
               content: responseData['content'] ?? '',
               isUser: false,
               timestamp: DateTime.parse(
@@ -405,8 +396,7 @@ class AtClientService {
           : 60, // Cap at 60 seconds
     );
 
-    debugPrint(
-        '🔄 Scheduling general stream reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
+    debugPrint('🔄 Scheduling general stream reconnect attempt $_reconnectAttempts in ${delay.inSeconds}s...');
 
     _reconnectTimer = Timer(delay, () {
       _connectToStreamWithRetry();
@@ -422,8 +412,7 @@ class AtClientService {
 
   /// Save a short-lived mapping from queryId -> conversationId to atPlatform
   /// This helps recover routing after app restarts or provider re-creation
-  Future<void> saveQueryMapping(String queryId, String conversationId,
-      {int ttlMilliseconds = 3600000}) async {
+  Future<void> saveQueryMapping(String queryId, String conversationId, {int ttlMilliseconds = 3600000}) async {
     if (_atClient == null) {
       // Can't save yet
       return;
@@ -515,8 +504,7 @@ class AtClientService {
 
   /// Store context data on atServer
   /// Uses a fixed key 'user_context' and stores all context as JSON
-  Future<void> storeContext(String key, String value,
-      {bool enabled = true}) async {
+  Future<void> storeContext(String key, String value, {bool enabled = true}) async {
     if (_atClient == null) {
       throw Exception('AtClient not initialized');
     }
@@ -526,10 +514,7 @@ class AtClientService {
       final existingContext = await _getAllContextWithFlags();
 
       // Add or update the key-value pair with enabled flag
-      existingContext[key] = <String, dynamic>{
-        'value': value,
-        'enabled': enabled
-      };
+      existingContext[key] = <String, dynamic>{'value': value, 'enabled': enabled};
 
       // Store as single JSON object with fixed key name
       final atKey = AtKey()
@@ -737,13 +722,11 @@ class AtClientService {
       final currentAtSign = _currentAtSign;
 
       // Pattern 1: Old individual context keys like @llama:context.myname.personalagent@cconstab
-      final pattern1 =
-          '$_agentAtSign:context\\..*\\.personalagent$currentAtSign';
+      final pattern1 = '$_agentAtSign:context\\..*\\.personalagent$currentAtSign';
       final keys1 = await _atClient!.getAtKeys(regex: pattern1);
 
       // Pattern 2: Old consolidated context key like @llama:user_context.personalagent@cconstab
-      final pattern2 =
-          '$_agentAtSign:user_context\\.personalagent$currentAtSign';
+      final pattern2 = '$_agentAtSign:user_context\\.personalagent$currentAtSign';
       final keys2 = await _atClient!.getAtKeys(regex: pattern2);
 
       final allOldKeys = [...keys1, ...keys2];
@@ -769,8 +752,7 @@ class AtClientService {
         }
       }
 
-      debugPrint(
-          '✅ Cleanup complete! Deleted $deletedCount/${allOldKeys.length} keys');
+      debugPrint('✅ Cleanup complete! Deleted $deletedCount/${allOldKeys.length} keys');
       return deletedCount;
     } catch (e, stackTrace) {
       debugPrint('Failed to cleanup old context: $e');
@@ -812,14 +794,11 @@ class AtClientService {
 
           if (atKey.key.startsWith('conversation_')) {
             type = 'conversation';
-            displayName =
-                'Conversation ${atKey.key.replaceAll('conversation_', '')}';
-          } else if (atKey.key == 'user_context' ||
-              atKey.key.startsWith('context.')) {
+            displayName = 'Conversation ${atKey.key.replaceAll('conversation_', '')}';
+          } else if (atKey.key == 'user_context' || atKey.key.startsWith('context.')) {
             type = 'context';
-            displayName = atKey.key == 'user_context'
-                ? 'User Context'
-                : 'Context: ${atKey.key.replaceAll('context.', '')}';
+            displayName =
+                atKey.key == 'user_context' ? 'User Context' : 'Context: ${atKey.key.replaceAll('context.', '')}';
           } else if (atKey.key.startsWith('mapping.')) {
             type = 'mapping';
             displayName = 'Query Mapping';
@@ -901,8 +880,7 @@ class AtClientService {
       subscription.cancel();
     }
     _querySubscriptions.clear();
-    debugPrint(
-        '🧹 Cleaned up ${_querySubscriptions.length} query subscriptions');
+    debugPrint('🧹 Cleaned up ${_querySubscriptions.length} query subscriptions');
 
     _messageController.close();
   }

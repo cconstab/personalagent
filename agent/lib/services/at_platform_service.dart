@@ -430,21 +430,43 @@ class AtPlatformService {
       AtNotificationStreamChannel<String, String>? channel = _queryChannels[queryId];
 
       if (channel == null) {
-        // First message for this query - establish connection
+        // First message for this query - establish connection with retry
         _logger.info('[${queryId}] 🔗 Connecting to query-specific stream: response.$queryId');
 
-        channel = await AtNotificationStreamChannel.connect<String, String>(
-          _atClient!,
-          otherAtsign: recipientAtSign,
-          baseNamespace: 'personalagent',
-          domainNamespace: 'response.$queryId', // Query-specific namespace
-          sendTransformer: const MessageSendTransformer(),
-          recvTransformer: const QueryReceiveTransformer(),
-        );
+        // Retry connection up to 3 times with increasing delays
+        int retryCount = 0;
+        const maxRetries = 3;
+        Exception? lastError;
+
+        while (channel == null && retryCount < maxRetries) {
+          try {
+            channel = await AtNotificationStreamChannel.connect<String, String>(
+              _atClient!,
+              otherAtsign: recipientAtSign,
+              baseNamespace: 'personalagent',
+              domainNamespace: 'response.$queryId', // Query-specific namespace
+              sendTransformer: const MessageSendTransformer(),
+              recvTransformer: const QueryReceiveTransformer(),
+            );
+            _logger.info('[${queryId}] ✅ Connected to query stream');
+          } catch (e) {
+            lastError = e as Exception;
+            retryCount++;
+            if (retryCount < maxRetries) {
+              final delayMs = 200 * retryCount; // 200ms, 400ms, 600ms
+              _logger.warning('[${queryId}] ⚠️ Connection attempt $retryCount failed, retrying in ${delayMs}ms: $e');
+              await Future.delayed(Duration(milliseconds: delayMs));
+            }
+          }
+        }
+
+        if (channel == null) {
+          _logger.severe('[${queryId}] ❌ Failed to connect after $maxRetries attempts');
+          throw lastError ?? Exception('Failed to connect to stream');
+        }
 
         // Cache the channel for reuse
         _queryChannels[queryId] = channel;
-        _logger.info('[${queryId}] ✅ Connected to query stream');
       }
 
       // Send the response through the existing/cached channel
