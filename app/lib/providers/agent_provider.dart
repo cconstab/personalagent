@@ -28,6 +28,11 @@ class AgentProvider extends ChangeNotifier {
   final Map<String, Timer> _queryTimeouts = {};
   static const Duration _queryTimeout = Duration(seconds: 60);
 
+  /// Streaming stall detection - tracks last update time for each streaming message
+  final Map<String, DateTime> _lastStreamingUpdate = {};
+  Timer? _streamingStallCheckTimer;
+  static const Duration _streamingStallTimeout = Duration(seconds: 15);
+
   /// Stream subscription for incoming messages
   StreamSubscription<ChatMessage>? _messageStreamSubscription;
 
@@ -55,12 +60,12 @@ class AgentProvider extends ChangeNotifier {
   /// Only rebuilds UI every 100ms instead of on every chunk
   void _throttledNotifyListeners() {
     if (!hasListeners) return;
-    
+
     _hasPendingUpdate = true;
-    
+
     // If throttle timer is already running, just mark pending
     if (_uiUpdateThrottle?.isActive ?? false) return;
-    
+
     // Start new throttle timer
     _uiUpdateThrottle = Timer(_uiUpdateInterval, () {
       if (_hasPendingUpdate) {
@@ -113,6 +118,73 @@ class AgentProvider extends ChangeNotifier {
     _queryTimeouts.remove(queryId);
   }
 
+  /// Check for stalled streaming messages and finalize them
+  void _checkForStalledStreams() {
+    final now = DateTime.now();
+    final stalledMessages = <String>[];
+
+    // Find messages that haven't been updated in 15 seconds
+    _lastStreamingUpdate.forEach((messageId, lastUpdate) {
+      final timeSinceUpdate = now.difference(lastUpdate);
+      if (timeSinceUpdate > _streamingStallTimeout) {
+        stalledMessages.add(messageId);
+      }
+    });
+
+    // Finalize stalled messages
+    for (final messageId in stalledMessages) {
+      debugPrint('⚠️ Streaming message $messageId stalled for ${_streamingStallTimeout.inSeconds}s, finalizing...');
+
+      // Find the conversation with this message
+      final conversationId = _queryToConversationMap[messageId];
+      if (conversationId == null) {
+        _lastStreamingUpdate.remove(messageId);
+        continue;
+      }
+
+      final conversation = _conversations.where((c) => c.id == conversationId).firstOrNull;
+      if (conversation == null) {
+        _lastStreamingUpdate.remove(messageId);
+        continue;
+      }
+
+      // Find the partial message
+      final messageIndex = conversation.messages.indexWhere((m) => m.id == messageId && !m.isUser);
+      if (messageIndex == -1) {
+        _lastStreamingUpdate.remove(messageId);
+        continue;
+      }
+
+      // Convert partial message to final
+      final partialMessage = conversation.messages[messageIndex];
+      final finalMessage = partialMessage.copyWith(
+        isPartial: false,
+      );
+
+      conversation.messages[messageIndex] = finalMessage;
+      conversation.updatedAt = DateTime.now();
+
+      // Clear streaming state
+      if (_currentStreamingMessageId == messageId) {
+        streamingMessageNotifier.value = null;
+        _currentStreamingMessageId = null;
+      }
+
+      _lastStreamingUpdate.remove(messageId);
+      _queryToConversationMap.remove(messageId);
+      _cancelQueryTimeout(messageId);
+
+      debugPrint('✅ Finalized stalled message $messageId');
+
+      // Save conversation
+      _saveConversation(conversation);
+    }
+
+    if (stalledMessages.isNotEmpty) {
+      _safeNotifyListeners();
+    }
+  }
+
   List<Conversation> get conversations => List.unmodifiable(_conversations);
   Conversation? get currentConversation => _conversations.where((c) => c.id == _currentConversationId).firstOrNull;
   List<ChatMessage> get messages => currentConversation?.messages ?? [];
@@ -126,6 +198,12 @@ class AgentProvider extends ChangeNotifier {
 
     // Listen for incoming messages from agent (including streaming updates)
     _messageStreamSubscription = _atClientService.messageStream.listen(_handleIncomingMessage);
+
+    // Start periodic check for stalled streaming messages
+    _streamingStallCheckTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _checkForStalledStreams(),
+    );
   }
 
   @override
@@ -135,6 +213,10 @@ class AgentProvider extends ChangeNotifier {
       timer.cancel();
     }
     _queryTimeouts.clear();
+
+    // Cancel streaming stall check timer
+    _streamingStallCheckTimer?.cancel();
+    _streamingStallCheckTimer = null;
 
     // **PERFORMANCE FIX**: Cancel UI update throttle timer
     _uiUpdateThrottle?.cancel();
@@ -146,6 +228,14 @@ class AgentProvider extends ChangeNotifier {
     // Cancel the message stream subscription
     _messageStreamSubscription?.cancel();
     _messageStreamSubscription = null;
+
+    // **MEMORY LEAK FIX**: Dispose AtClientService to clean up all stream subscriptions
+    try {
+      _atClientService.dispose();
+      debugPrint('🧹 AtClientService disposed');
+    } catch (e) {
+      debugPrint('⚠️ Error disposing AtClientService: $e');
+    }
 
     // Clear pending messages
     _pendingMessages.clear();
@@ -249,6 +339,9 @@ class AgentProvider extends ChangeNotifier {
           conversation.messages[existingIndex] = message;
           debugPrint('🔄 Updated streaming message ${message.id} (chunk ${message.chunkIndex})');
           debugPrint('   Old content length: ${oldContent.length}, New: ${message.content.length}');
+
+          // Track this update to detect stalls
+          _lastStreamingUpdate[message.id] = DateTime.now();
         } else {
           // First chunk - replace thinking placeholder and add actual message
           final thinkingPlaceholderId = '${message.id}_thinking';
@@ -263,10 +356,16 @@ class AgentProvider extends ChangeNotifier {
             conversation.messages[thinkingIndex] = message;
             debugPrint('🔄 Replaced thinking placeholder with first chunk for ${message.id}');
             debugPrint('   New message ID at index $thinkingIndex: ${conversation.messages[thinkingIndex].id}');
+
+            // Track this as the first update
+            _lastStreamingUpdate[message.id] = DateTime.now();
           } else {
             // No placeholder found, just add
             _addMessageToConversation(conversation, message);
             debugPrint('➕ Added first streaming chunk for ${message.id} (no placeholder found)');
+
+            // Track this as the first update
+            _lastStreamingUpdate[message.id] = DateTime.now();
           }
         }
 
@@ -275,7 +374,7 @@ class AgentProvider extends ChangeNotifier {
         // This prevents rebuilding the entire ListView
         _currentStreamingMessageId = message.id;
         streamingMessageNotifier.value = message;
-        
+
         // Still use throttled notify for scroll position updates
         _throttledNotifyListeners();
       } else {
@@ -322,6 +421,9 @@ class AgentProvider extends ChangeNotifier {
           streamingMessageNotifier.value = null;
           _currentStreamingMessageId = null;
         }
+
+        // Clean up streaming stall tracking
+        _lastStreamingUpdate.remove(message.id);
 
         // Clean up the mapping only after final message
         _queryToConversationMap.remove(message.id);
@@ -704,15 +806,16 @@ class AgentProvider extends ChangeNotifier {
       final messages = currentConversation!.messages;
       // Exclude last 2 messages: the user message we just added and the thinking placeholder
       final allHistory = messages.length > 2 ? messages.sublist(0, messages.length - 2) : <ChatMessage>[];
-      
+
       // **PERFORMANCE FIX**: Limit conversation history to last 10 messages (5 exchanges)
       // Sending the entire conversation history slows down the app over time
       const maxHistoryMessages = 10;
-      final conversationHistory = allHistory.length > maxHistoryMessages 
+      final conversationHistory = allHistory.length > maxHistoryMessages
           ? allHistory.sublist(allHistory.length - maxHistoryMessages)
           : allHistory;
 
-      debugPrint('📝 Including ${conversationHistory.length} previous messages for context (limited from ${allHistory.length} total)');
+      debugPrint(
+          '📝 Including ${conversationHistory.length} previous messages for context (limited from ${allHistory.length} total)');
 
       // If this is the first message in the conversation, prepend context as a system message
       List<ChatMessage> historyWithContext = conversationHistory;

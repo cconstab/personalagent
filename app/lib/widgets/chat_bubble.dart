@@ -83,7 +83,8 @@ class _ChatBubbleState extends State<ChatBubble> {
   void _onStreamingUpdate() {
     final streamingMessage = _agentProvider?.streamingMessageNotifier.value;
     // Only rebuild if this is the message being streamed OR if streaming was cleared
-    if (mounted && (streamingMessage?.id == widget.message.id || (_streamingMessage != null && streamingMessage == null))) {
+    if (mounted &&
+        (streamingMessage?.id == widget.message.id || (_streamingMessage != null && streamingMessage == null))) {
       setState(() {
         _streamingMessage = streamingMessage;
       });
@@ -94,9 +95,13 @@ class _ChatBubbleState extends State<ChatBubble> {
   Widget build(BuildContext context) {
     final isUser = widget.message.isUser;
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     // **PERFORMANCE FIX**: Use streaming message if available, otherwise use widget.message
     final displayMessage = _streamingMessage ?? widget.message;
+
+    // Only show streaming indicator if we're actively streaming this message
+    final isActivelyStreaming =
+        _streamingMessage != null && _streamingMessage!.id == widget.message.id && _streamingMessage!.isPartial;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
@@ -104,30 +109,22 @@ class _ChatBubbleState extends State<ChatBubble> {
       child: Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Row(
-          mainAxisAlignment:
-              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!isUser) ...[
               CircleAvatar(
-                backgroundColor: displayMessage.isError
-                    ? colorScheme.error
-                    : colorScheme.primaryContainer,
+                backgroundColor: displayMessage.isError ? colorScheme.error : colorScheme.primaryContainer,
                 child: Icon(
-                  displayMessage.isError
-                      ? Icons.error_outline
-                      : Icons.smart_toy,
-                  color: widget.message.isError
-                      ? colorScheme.onError
-                      : colorScheme.onPrimaryContainer,
+                  displayMessage.isError ? Icons.error_outline : Icons.smart_toy,
+                  color: widget.message.isError ? colorScheme.onError : colorScheme.onPrimaryContainer,
                 ),
               ),
               const SizedBox(width: 8),
             ],
             Flexible(
               child: Column(
-                crossAxisAlignment:
-                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   Stack(
                     children: [
@@ -149,17 +146,12 @@ class _ChatBubbleState extends State<ChatBubble> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (!isUser &&
-                                widget.message.agentName != null) ...[
+                            if (!isUser && widget.message.agentName != null) ...[
                               Row(
                                 children: [
                                   Text(
                                     widget.message.agentName ?? '',
-                                    style: (Theme.of(context)
-                                                .textTheme
-                                                .labelSmall ??
-                                            const TextStyle())
-                                        .copyWith(
+                                    style: (Theme.of(context).textTheme.labelSmall ?? const TextStyle()).copyWith(
                                       color: colorScheme.primary,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -167,22 +159,14 @@ class _ChatBubbleState extends State<ChatBubble> {
                                   if (widget.message.model != null) ...[
                                     Text(
                                       ' • ',
-                                      style: (Theme.of(context)
-                                                  .textTheme
-                                                  .labelSmall ??
-                                              const TextStyle())
-                                          .copyWith(
+                                      style: (Theme.of(context).textTheme.labelSmall ?? const TextStyle()).copyWith(
                                         color: colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                     Flexible(
                                       child: Text(
                                         widget.message.model ?? '',
-                                        style: (Theme.of(context)
-                                                    .textTheme
-                                                    .labelSmall ??
-                                                const TextStyle())
-                                            .copyWith(
+                                        style: (Theme.of(context).textTheme.labelSmall ?? const TextStyle()).copyWith(
                                           color: colorScheme.onSurfaceVariant,
                                           fontStyle: FontStyle.italic,
                                         ),
@@ -202,70 +186,46 @@ class _ChatBubbleState extends State<ChatBubble> {
                                   MarkdownBody(
                                     data: displayMessage.content,
                                     selectable: false,
-                                    styleSheet: MarkdownStyleSheet.fromTheme(
-                                            Theme.of(context))
-                                        .copyWith(
-                                      p: (Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium ??
-                                              const TextStyle())
-                                          .copyWith(
+                                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                      p: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
                                         color: widget.message.isError
                                             ? colorScheme.onErrorContainer
                                             : colorScheme.onSurfaceVariant,
                                       ),
-                                      strong: (Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium ??
-                                              const TextStyle())
-                                          .copyWith(
+                                      strong: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
                                         color: widget.message.isError
                                             ? colorScheme.onErrorContainer
                                             : colorScheme.onSurfaceVariant,
                                         fontWeight: FontWeight.bold,
                                       ),
-                                      em: (Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium ??
-                                              const TextStyle())
-                                          .copyWith(
+                                      em: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
                                         color: widget.message.isError
                                             ? colorScheme.onErrorContainer
                                             : colorScheme.onSurfaceVariant,
                                         fontStyle: FontStyle.italic,
                                       ),
-                                      listBullet: (Theme.of(context)
-                                                  .textTheme
-                                                  .bodyMedium ??
-                                              const TextStyle())
-                                          .copyWith(
+                                      listBullet:
+                                          (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
                                         color: widget.message.isError
                                             ? colorScheme.onErrorContainer
                                             : colorScheme.onSurfaceVariant,
                                       ),
-                                      code: (Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall ??
-                                              const TextStyle())
-                                          .copyWith(
+                                      code: (Theme.of(context).textTheme.bodySmall ?? const TextStyle()).copyWith(
                                         color: widget.message.isError
                                             ? colorScheme.onErrorContainer
                                             : colorScheme.onSurfaceVariant,
                                         fontFamily: 'monospace',
-                                        backgroundColor: colorScheme.surface
-                                            .withOpacity(0.3),
+                                        backgroundColor: colorScheme.surface.withOpacity(0.3),
                                       ),
                                     ),
                                     onTapLink: (text, href, title) {
                                       if (href != null) {
-                                        launchUrl(Uri.parse(href),
-                                            mode:
-                                                LaunchMode.externalApplication);
+                                        launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
                                       }
                                     },
                                   ),
                                   // Show streaming indicator for partial messages
-                                  if (displayMessage.isPartial) ...[
+                                  if (isActivelyStreaming) ...[
                                     const SizedBox(height: 4),
                                     Row(
                                       children: [
@@ -274,22 +234,14 @@ class _ChatBubbleState extends State<ChatBubble> {
                                           height: 12,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            color: colorScheme.primary
-                                                .withOpacity(0.6),
+                                            color: colorScheme.primary.withOpacity(0.6),
                                           ),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          displayMessage.content.isEmpty
-                                              ? 'Thinking...'
-                                              : 'Streaming...',
-                                          style: (Theme.of(context)
-                                                      .textTheme
-                                                      .bodySmall ??
-                                                  const TextStyle())
-                                              .copyWith(
-                                            color: colorScheme.onSurfaceVariant
-                                                .withOpacity(0.7),
+                                          displayMessage.content.isEmpty ? 'Thinking...' : 'Streaming...',
+                                          style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle()).copyWith(
+                                            color: colorScheme.onSurfaceVariant.withOpacity(0.7),
                                             fontStyle: FontStyle.italic,
                                           ),
                                         ),
@@ -301,10 +253,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                             else
                               SelectableText(
                                 widget.message.content,
-                                style:
-                                    (Theme.of(context).textTheme.bodyMedium ??
-                                            const TextStyle())
-                                        .copyWith(
+                                style: (Theme.of(context).textTheme.bodyMedium ?? const TextStyle()).copyWith(
                                   color: colorScheme.onPrimaryContainer,
                                 ),
                               ),
@@ -316,9 +265,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                         ),
                       ),
                       // Copy button for non-user messages
-                      if (!isUser &&
-                          _isHovering &&
-                          widget.message.content.isNotEmpty)
+                      if (!isUser && _isHovering && widget.message.content.isNotEmpty)
                         Positioned(
                           top: 8,
                           right: 8,
@@ -345,9 +292,7 @@ class _ChatBubbleState extends State<ChatBubble> {
                   const SizedBox(height: 4),
                   Text(
                     _formatTime(widget.message.timestamp),
-                    style: (Theme.of(context).textTheme.bodySmall ??
-                            const TextStyle())
-                        .copyWith(
+                    style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle()).copyWith(
                       color: colorScheme.onSurface.withOpacity(0.5),
                     ),
                   ),
@@ -402,8 +347,7 @@ class _ChatBubbleState extends State<ChatBubble> {
         const SizedBox(width: 4),
         Text(
           label,
-          style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle())
-              .copyWith(
+          style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle()).copyWith(
             color: color,
             fontWeight: FontWeight.w500,
           ),
@@ -414,8 +358,7 @@ class _ChatBubbleState extends State<ChatBubble> {
           const SizedBox(width: 2),
           Text(
             'Privacy Filtered',
-            style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle())
-                .copyWith(
+            style: (Theme.of(context).textTheme.bodySmall ?? const TextStyle()).copyWith(
               color: colorScheme.primary,
               fontWeight: FontWeight.w500,
             ),

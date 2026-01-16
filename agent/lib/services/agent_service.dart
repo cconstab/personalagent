@@ -86,12 +86,10 @@ class AgentService {
 
       _logger.fine('😎 Acquired mutex for query ${query.id} - this agent will respond');
 
-      // Process the query
+      // Process the query (this internally sends streaming chunks AND the final message)
       final response = await processQuery(query);
 
-      // Connect to the query-specific response stream and send response
-      await atPlatform.sendStreamResponseToQuery(query.userId, query.id, response);
-
+      // Response already sent during streaming - just log completion
       _logger.shout('[${query.id}] ✅ Replied to ${query.userId}');
     } catch (e, stackTrace) {
       _logger.severe('[${query.id}] Failed to handle query', e, stackTrace);
@@ -241,7 +239,9 @@ Respond naturally and conversationally.
     _logger.info(
       '[${query.id}] 🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming',
     );
-    _logger.info('[${query.id}] 📝 Ollama prompt (${ollamaPrompt.length} chars):\n${ollamaPrompt.length > 500 ? ollamaPrompt.substring(0, 500) + "..." : ollamaPrompt}');
+    _logger.info(
+      '[${query.id}] 📝 Ollama prompt (${ollamaPrompt.length} chars):\n${ollamaPrompt.length > 500 ? ollamaPrompt.substring(0, 500) + "..." : ollamaPrompt}',
+    );
 
     // Stream the response and send incremental updates
     // Use batching to reduce atPlatform notification overhead
@@ -303,8 +303,8 @@ Respond naturally and conversationally.
       }
     }
 
-    // Return final complete message
-    return ResponseMessage(
+    // Send final complete message
+    final finalMessage = ResponseMessage(
       id: query.id,
       content: fullResponse.toString(),
       source: ResponseSource.ollama,
@@ -315,6 +315,13 @@ Respond naturally and conversationally.
       conversationId: query.conversationId, // Echo back conversation ID
       isPartial: false,
     );
+
+    // Send the final message through the stream
+    await atPlatform.sendStreamResponseToQuery(query.userId, query.id, finalMessage);
+    _logger.info('[${query.id}] ✅ Sent final message (${fullResponse.length} chars)');
+
+    // Return the message for logging/tracking purposes only (already sent)
+    return finalMessage;
   }
 
   /// Process query using hybrid approach (Ollama + Claude)
@@ -354,7 +361,9 @@ Respond naturally and conversationally.
         : sanitizedQuery;
 
     _logger.info('[${query.id}] 🌐 Streaming response from Claude...');
-    _logger.info('[${query.id}] 📝 Claude prompt (${claudePrompt.length} chars):\n${claudePrompt.length > 500 ? claudePrompt.substring(0, 500) + "..." : claudePrompt}');
+    _logger.info(
+      '[${query.id}] 📝 Claude prompt (${claudePrompt.length} chars):\n${claudePrompt.length > 500 ? claudePrompt.substring(0, 500) + "..." : claudePrompt}',
+    );
     final StringBuffer claudeFullResponse = StringBuffer();
     await for (final chunk in claude!.queryStream(sanitizedQuery: claudePrompt)) {
       claudeFullResponse.write(chunk.content);
@@ -396,7 +405,9 @@ $claudeResponseContent
     // Stream Ollama's final synthesis with batching
     final synthesisPrompt = promptBuffer.toString();
     _logger.info('[${query.id}] 🤖 Synthesizing final response with Ollama streaming...');
-    _logger.info('[${query.id}] 📝 Synthesis prompt (${synthesisPrompt.length} chars):\n${synthesisPrompt.length > 500 ? synthesisPrompt.substring(0, 500) + "..." : synthesisPrompt}');
+    _logger.info(
+      '[${query.id}] 📝 Synthesis prompt (${synthesisPrompt.length} chars):\n${synthesisPrompt.length > 500 ? synthesisPrompt.substring(0, 500) + "..." : synthesisPrompt}',
+    );
     final StringBuffer fullResponse = StringBuffer();
     int chunkIndex = 0;
     DateTime lastSendTime = DateTime.now();
@@ -453,11 +464,11 @@ $claudeResponseContent
       }
     }
 
-    // Return final complete message
+    // Send final complete message
     _logger.shout('[${query.id}] ✅ HYBRID processing complete: Claude + Ollama synthesis');
     _logger.info('[${query.id}]    Final response length: ${fullResponse.length} characters');
 
-    return ResponseMessage(
+    final finalMessage = ResponseMessage(
       id: query.id,
       content: fullResponse.toString(),
       source: ResponseSource.hybrid,
@@ -468,6 +479,13 @@ $claudeResponseContent
       conversationId: query.conversationId, // Echo back conversation ID
       isPartial: false,
     );
+
+    // Send the final message through the stream
+    await atPlatform.sendStreamResponseToQuery(query.userId, query.id, finalMessage);
+    _logger.info('[${query.id}] ✅ Sent final HYBRID message (${fullResponse.length} chars)');
+
+    // Return the message for logging/tracking purposes only (already sent)
+    return finalMessage;
   }
 
   /// Store new context data

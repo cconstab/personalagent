@@ -65,11 +65,11 @@ class _HomeScreenState extends State<HomeScreen> {
           agentProvider.setAgentAtSign(agentAtSignToUse);
         }
 
-        // Set in AtClientService (required for stream)
+        // Set in AtClientService (required for query-specific streams)
         atClientService.setAgentAtSign(agentAtSignToUse);
 
-        // Establish stream connection (required for stream-only mode)
-        await atClientService.startResponseStreamConnection();
+        // NOTE: No longer establishing general stream connection
+        // We use query-specific streams (response.<queryId>) for each message
 
         // Now that AtClient is ready, reload conversations from atPlatform
         await agentProvider.reloadConversations();
