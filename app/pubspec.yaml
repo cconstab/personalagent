@@ -45,6 +45,9 @@ dev_dependencies:
 dependency_overrides:
   # Match noports project's working versions
   showcaseview: ^5.0.1
+  
+  # Force newer archive version required by at_stream
+  archive: ^4.0.7
 
 flutter:
   uses-material-design: true
