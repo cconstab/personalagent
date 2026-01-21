@@ -241,7 +241,9 @@ Respond naturally and conversationally.
     _logger.info(
       '[${query.id}] 🤖 Sending prompt to Ollama (${hasHistory ? "with history" : "new conversation"}) with streaming',
     );
-    _logger.info('[${query.id}] 📝 Ollama prompt (${ollamaPrompt.length} chars):\n${ollamaPrompt.length > 500 ? ollamaPrompt.substring(0, 500) + "..." : ollamaPrompt}');
+    _logger.info(
+      '[${query.id}] 📝 Ollama prompt (${ollamaPrompt.length} chars):\n${ollamaPrompt.length > 500 ? ollamaPrompt.substring(0, 500) + "..." : ollamaPrompt}',
+    );
 
     // Stream the response and send incremental updates
     // Use batching to reduce atPlatform notification overhead
@@ -354,7 +356,9 @@ Respond naturally and conversationally.
         : sanitizedQuery;
 
     _logger.info('[${query.id}] 🌐 Streaming response from Claude...');
-    _logger.info('[${query.id}] 📝 Claude prompt (${claudePrompt.length} chars):\n${claudePrompt.length > 500 ? claudePrompt.substring(0, 500) + "..." : claudePrompt}');
+    _logger.info(
+      '[${query.id}] 📝 Claude prompt (${claudePrompt.length} chars):\n${claudePrompt.length > 500 ? claudePrompt.substring(0, 500) + "..." : claudePrompt}',
+    );
     final StringBuffer claudeFullResponse = StringBuffer();
     await for (final chunk in claude!.queryStream(sanitizedQuery: claudePrompt)) {
       claudeFullResponse.write(chunk.content);
@@ -396,7 +400,9 @@ $claudeResponseContent
     // Stream Ollama's final synthesis with batching
     final synthesisPrompt = promptBuffer.toString();
     _logger.info('[${query.id}] 🤖 Synthesizing final response with Ollama streaming...');
-    _logger.info('[${query.id}] 📝 Synthesis prompt (${synthesisPrompt.length} chars):\n${synthesisPrompt.length > 500 ? synthesisPrompt.substring(0, 500) + "..." : synthesisPrompt}');
+    _logger.info(
+      '[${query.id}] 📝 Synthesis prompt (${synthesisPrompt.length} chars):\n${synthesisPrompt.length > 500 ? synthesisPrompt.substring(0, 500) + "..." : synthesisPrompt}',
+    );
     final StringBuffer fullResponse = StringBuffer();
     int chunkIndex = 0;
     DateTime lastSendTime = DateTime.now();
