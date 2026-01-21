@@ -1,0 +1,982 @@
+{
+  "pages": [
+    {
+      "id": 1765495172337,
+      "name": "Page 1",
+      "nodes": [],
+      "edges": [],
+      "brand": "atsign"
+    },
+    {
+      "id": 1766095190075,
+      "name": "Page 1",
+      "nodes": [],
+      "edges": [],
+      "brand": "flows"
+    },
+    {
+      "id": 1768940060015,
+      "name": "Page 1",
+      "nodes": [
+        {
+          "id": "node_user",
+          "type": "custom",
+          "position": {
+            "x": -402,
+            "y": 365
+          },
+          "data": {
+            "label": "User (@cconstab)",
+            "description": "Person using the Flutter app to interact with their personal AI agent",
+            "nodeType": "person",
+            "notes": "User types queries in chat interface, views streaming responses in real-time",
+            "showNotes": true,
+            "nodeWidth": 315,
+            "nodeHeight": 220
+          },
+          "width": 315,
+          "height": 220,
+          "style": {
+            "width": 315,
+            "height": 220
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": -402,
+            "y": 365
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_flutter_app",
+          "type": "custom",
+          "position": {
+            "x": 242,
+            "y": 375
+          },
+          "data": {
+            "label": "Flutter App",
+            "description": "Cross-platform UI (Windows/macOS/Linux) for chat interface and conversation management",
+            "nodeType": "process",
+            "notes": "Path: app/ | Key files: lib/main.dart, lib/screens/home_screen.dart, lib/widgets/chat_bubble.dart | Uses reverse ListView for natural bottom positioning",
+            "showNotes": true,
+            "nodeWidth": 344,
+            "nodeHeight": 207,
+            "type": "process"
+          },
+          "width": 344,
+          "height": 207,
+          "style": {
+            "width": 344,
+            "height": 207
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 242,
+            "y": 375
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_agent_provider",
+          "type": "custom",
+          "position": {
+            "x": 654,
+            "y": 95
+          },
+          "data": {
+            "label": "AgentProvider",
+            "description": "State management - manages conversations, messages, and streaming updates",
+            "nodeType": "process",
+            "notes": "Path: app/lib/providers/agent_provider.dart | Responsibilities: Conversation management, message routing, streaming updates, query timeout (60s), stall detection (15s), cleanup on dispose",
+            "showNotes": true,
+            "nodeWidth": 364,
+            "nodeHeight": 189,
+            "type": "process"
+          },
+          "width": 364,
+          "height": 189,
+          "style": {
+            "width": 364,
+            "height": 189
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 654,
+            "y": 95
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_at_client_service",
+          "type": "custom",
+          "position": {
+            "x": 1068,
+            "y": 391
+          },
+          "data": {
+            "label": "AtClientService (App)",
+            "description": "App-side atPlatform communication layer - sends queries and receives responses",
+            "nodeType": "api",
+            "notes": "Path: app/lib/services/at_client_service.dart | Operations: bind() to namespace 'response.$queryId', send query notifications, receive streaming responses, subscription lifecycle with periodic cleanup (5 min)",
+            "showNotes": true,
+            "nodeWidth": 332,
+            "nodeHeight": 207,
+            "type": "process"
+          },
+          "width": 332,
+          "height": 207,
+          "style": {
+            "width": 332,
+            "height": 207
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 1068,
+            "y": 391
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_storage_service",
+          "type": "custom",
+          "position": {
+            "x": 663,
+            "y": 670
+          },
+          "data": {
+            "label": "Storage Service",
+            "description": "Encrypted atPlatform storage for conversations and context",
+            "nodeType": "thing",
+            "notes": "Path: app/lib/services/storage_service.dart | Stores: Conversations (with TTL), messages, user context, query-conversation mappings | Uses atClient.put() and atClient.get()",
+            "showNotes": true,
+            "nodeWidth": 346,
+            "nodeHeight": 214,
+            "type": "other"
+          },
+          "width": 346,
+          "height": 214,
+          "style": {
+            "width": 346,
+            "height": 214
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 663,
+            "y": 670
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_atplatform_network",
+          "type": "custom",
+          "position": {
+            "x": 1751,
+            "y": 392
+          },
+          "data": {
+            "label": "atPlatform Network",
+            "description": "Secure, encrypted peer-to-peer communication infrastructure",
+            "nodeType": "entity",
+            "notes": "Protocols: AtNotificationStreamChannel (bidirectional streaming), encrypted notifications, secure key exchange | Query-specific namespaces: 'personalagent.response.$queryId'",
+            "showNotes": true,
+            "nodeWidth": 309,
+            "nodeHeight": 211,
+            "type": "other"
+          },
+          "width": 309,
+          "height": 211,
+          "style": {
+            "width": 309,
+            "height": 211
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 1751,
+            "y": 392
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_agent_daemon",
+          "type": "custom",
+          "position": {
+            "x": 2782,
+            "y": 738
+          },
+          "data": {
+            "label": "Agent Daemon",
+            "description": "Background service running the AI agent (Dart CLI)",
+            "nodeType": "process",
+            "notes": "Path: agent/bin/agent.dart | Startup: run_agent.bat/sh | Mode: Always-on background service | Stateless design enables multiple agent instances",
+            "showNotes": true,
+            "nodeWidth": 257,
+            "nodeHeight": 230,
+            "type": "process"
+          },
+          "width": 257,
+          "height": 230,
+          "style": {
+            "width": 257,
+            "height": 230
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 2782,
+            "y": 738
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_agent_service",
+          "type": "custom",
+          "position": {
+            "x": 2778,
+            "y": 372
+          },
+          "data": {
+            "label": "AgentService",
+            "description": "Main orchestration - routes queries to appropriate LLM mode",
+            "nodeType": "process",
+            "notes": "Path: agent/lib/services/agent_service.dart | Modes: Ollama-only (95% - private), Hybrid (5% - external knowledge) | Privacy threshold: 0.7 | Mutex-based query locking for multi-agent coordination | Streaming with batching (500ms or 50 chars)",
+            "showNotes": true,
+            "nodeWidth": 263,
+            "nodeHeight": 246,
+            "type": "process"
+          },
+          "width": 263,
+          "height": 246,
+          "style": {
+            "width": 263,
+            "height": 246
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 2778,
+            "y": 372
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_at_platform_service",
+          "type": "custom",
+          "position": {
+            "x": 2280,
+            "y": 388
+          },
+          "data": {
+            "label": "AtPlatformService Agent (@llama)",
+            "description": "Agent-side atPlatform communication - listens for queries and streams responses",
+            "nodeType": "api",
+            "notes": "Path: agent/lib/services/at_platform_service.dart | Operations: Subscribe to query notifications, connect() to 'response.$queryId', send partial/final messages, mutex operations, channel caching, retry logic (3 attempts: 200/400/600ms)",
+            "showNotes": true,
+            "nodeWidth": 352,
+            "nodeHeight": 216,
+            "type": "entity"
+          },
+          "width": 352,
+          "height": 216,
+          "style": {
+            "width": 352,
+            "height": 216
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 2280,
+            "y": 388
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_ollama",
+          "type": "custom",
+          "position": {
+            "x": 3303,
+            "y": 189
+          },
+          "data": {
+            "label": "Ollama (Local LLM)",
+            "description": "Privacy-first local AI - runs on user's machine for private queries",
+            "nodeType": "api",
+            "notes": "Path: agent/lib/services/ollama_service.dart | Endpoint: http://localhost:11434 | Operations: Query analysis (can answer locally?), query sanitization (remove PII), streaming response generation, context-aware generation",
+            "showNotes": true,
+            "nodeWidth": 242,
+            "nodeHeight": 218,
+            "type": "api"
+          },
+          "width": 242,
+          "height": 218,
+          "style": {
+            "width": 242,
+            "height": 218
+          },
+          "selected": true,
+          "positionAbsolute": {
+            "x": 3303,
+            "y": 189
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_claude",
+          "type": "custom",
+          "position": {
+            "x": 3278,
+            "y": 598
+          },
+          "data": {
+            "label": "Claude API",
+            "description": "External LLM for general knowledge (5% of queries requiring external info)",
+            "nodeType": "api",
+            "notes": "Path: agent/lib/services/claude_service.dart | Usage: Hybrid mode only - queries needing external knowledge | Endpoint: https://api.anthropic.com | PII removed before external call",
+            "showNotes": true,
+            "nodeWidth": 271,
+            "nodeHeight": 232,
+            "type": "api"
+          },
+          "width": 271,
+          "height": 232,
+          "style": {
+            "width": 271,
+            "height": 232
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 3278,
+            "y": 598
+          },
+          "dragging": false
+        },
+        {
+          "id": "node_local_storage",
+          "type": "custom",
+          "position": {
+            "x": 2774,
+            "y": 1044
+          },
+          "data": {
+            "label": "Local Storage (Hive)",
+            "description": "Local database for settings and mutex state",
+            "nodeType": "thing",
+            "notes": "Location: agent/storage/hive, app local storage | Purpose: Settings, cached data, mutex state for multi-agent coordination",
+            "showNotes": true,
+            "nodeWidth": 277,
+            "nodeHeight": 225,
+            "type": "other"
+          },
+          "width": 277,
+          "height": 225,
+          "style": {
+            "width": 277,
+            "height": 225
+          },
+          "selected": false,
+          "positionAbsolute": {
+            "x": 2774,
+            "y": 1044
+          },
+          "dragging": false
+        }
+      ],
+      "edges": [
+        {
+          "type": "smoothstep",
+          "source": "node_user",
+          "sourceHandle": "right",
+          "target": "node_flutter_app",
+          "targetHandle": "left",
+          "animated": false,
+          "style": {
+            "stroke": "#64748b",
+            "strokeWidth": 2.5
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "User types query in chat interface",
+            "implementation": "TextField onSubmitted -> AgentProvider.sendMessage()"
+          },
+          "id": "edge_user_to_app"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_flutter_app",
+          "sourceHandle": "top",
+          "target": "node_agent_provider",
+          "targetHandle": "bottom",
+          "animated": false,
+          "style": {
+            "stroke": "#8b5cf6",
+            "strokeWidth": 2.5
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Widget interactions trigger provider state updates",
+            "implementation": "Provider.of<AgentProvider>(context, listen: true)"
+          },
+          "id": "edge_app_to_provider"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_agent_provider",
+          "sourceHandle": "right",
+          "target": "node_at_client_service",
+          "targetHandle": "left",
+          "animated": true,
+          "style": {
+            "stroke": "#10b981",
+            "strokeWidth": 2.5
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Provider calls service to send query with conversation context",
+            "implementation": "await _atClientService.sendMessage(message, conversationId: _currentConversationId, conversationHistory: messages)"
+          },
+          "id": "edge_provider_to_atclient"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_at_client_service",
+          "sourceHandle": "right",
+          "target": "node_atplatform_network",
+          "targetHandle": "left",
+          "animated": true,
+          "style": {
+            "stroke": "#f59e0b",
+            "strokeWidth": 3
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#fef3c7",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "App sets up bind listener (100ms delay), then sends encrypted query notification",
+            "implementation": "bindStream = AtNotificationStreamChannel.bind(namespace: 'response.$queryId'); await Future.delayed(100ms); await atClient.notify(AtKey.shared('query')..sharedWith(agentAtSign), queryJson)"
+          },
+          "id": "edge_app_to_atplatform"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_atplatform_network",
+          "sourceHandle": "right",
+          "target": "node_at_platform_service",
+          "targetHandle": "left",
+          "animated": true,
+          "style": {
+            "stroke": "#f59e0b",
+            "strokeWidth": 3
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#fef3c7",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "atPlatform delivers notification to agent's secondary server",
+            "implementation": "NotificationService delivers to subscribed agent"
+          },
+          "id": "edge_atplatform_to_agent_service"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_at_platform_service",
+          "sourceHandle": "top",
+          "target": "node_agent_service",
+          "targetHandle": "bottom",
+          "animated": true,
+          "style": {
+            "stroke": "#8b5cf6",
+            "strokeWidth": 2.5
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Parse notification, check mutex, pass to orchestrator",
+            "implementation": "subscribeToMessages(_handleIncomingQuery) -> tryAcquireMutex() -> processQuery()"
+          },
+          "id": "edge_atservice_to_agent"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_agent_service",
+          "sourceHandle": "top",
+          "target": "node_ollama",
+          "targetHandle": "left",
+          "animated": false,
+          "style": {
+            "stroke": "#06b6d4",
+            "strokeWidth": 2.5
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Analyze if can answer locally (95% of queries), then stream response",
+            "implementation": "analysis = await ollama.analyzeQuery(); if (confidence >= 0.7) await for (chunk in ollama.generateStream(prompt)) {...}"
+          },
+          "id": "edge_agent_to_ollama"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_agent_service",
+          "sourceHandle": "top",
+          "target": "node_claude",
+          "targetHandle": "left",
+          "animated": false,
+          "style": {
+            "stroke": "#ec4899",
+            "strokeWidth": 2,
+            "strokeDasharray": "10, 5"
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#fce7f3",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "For queries needing external knowledge (5%): sanitize PII, get Claude response, synthesize with Ollama",
+            "implementation": "sanitized = await ollama.sanitizeQuery(); claudeResponse = await claude.queryStream(); await ollama.generateStream(prompt + claudeResponse)"
+          },
+          "id": "edge_agent_to_claude"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_agent_service",
+          "sourceHandle": "bottom",
+          "target": "node_at_platform_service",
+          "targetHandle": "top",
+          "animated": true,
+          "style": {
+            "stroke": "#10b981",
+            "strokeWidth": 3
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#d1fae5",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Stream partial messages batched (500ms or 50 chars), then send final (isPartial: false)",
+            "implementation": "await atPlatform.sendStreamResponseToQuery(userId, queryId, partialMessage); // ...then finalMessage"
+          },
+          "id": "edge_agent_to_atservice_stream"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_at_platform_service",
+          "sourceHandle": "left",
+          "target": "node_atplatform_network",
+          "targetHandle": "right",
+          "animated": true,
+          "style": {
+            "stroke": "#3b82f6",
+            "strokeWidth": 3,
+            "strokeDasharray": "12, 8"
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#dbeafe",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Agent connects to stream with retry (3 attempts), sends partial/final messages",
+            "implementation": "channel = await AtNotificationStreamChannel.connect(namespace: 'response.$queryId', retry: 3); channel.sink.add(jsonEncode(response))"
+          },
+          "id": "edge_atservice_to_atplatform_stream",
+          "selected": false
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_atplatform_network",
+          "sourceHandle": "left",
+          "target": "node_at_client_service",
+          "targetHandle": "right",
+          "animated": true,
+          "style": {
+            "stroke": "#3b82f6",
+            "strokeWidth": 3,
+            "strokeDasharray": "12, 8"
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#dbeafe",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "atPlatform delivers streaming messages to app's bind listener",
+            "implementation": "Bind listener receives connection, then message stream"
+          },
+          "id": "edge_atplatform_to_app_stream"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_at_client_service",
+          "sourceHandle": "left",
+          "target": "node_agent_provider",
+          "targetHandle": "right",
+          "animated": true,
+          "style": {
+            "stroke": "#8b5cf6",
+            "strokeWidth": 2.5,
+            "strokeDasharray": "8, 5"
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Parse response JSON, emit to provider's message stream",
+            "implementation": "_messageController.add(ChatMessage.fromJson(responseData))"
+          },
+          "id": "edge_atclient_to_provider_stream"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_agent_provider",
+          "sourceHandle": "bottom",
+          "target": "node_flutter_app",
+          "targetHandle": "top",
+          "animated": true,
+          "style": {
+            "stroke": "#10b981",
+            "strokeWidth": 2.5
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#d1fae5",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Provider updates conversation, triggers UI rebuild (throttled 100ms)",
+            "implementation": "Update partial message in place, streamingMessageNotifier.value = message, _throttledNotifyListeners()"
+          },
+          "id": "edge_provider_to_app_rebuild",
+          "selected": false
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_flutter_app",
+          "sourceHandle": "left",
+          "target": "node_user",
+          "targetHandle": "right",
+          "animated": true,
+          "style": {
+            "stroke": "#10b981",
+            "strokeWidth": 2.5
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#d1fae5",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "User sees response stream in real-time with streaming indicator",
+            "implementation": "ChatBubble updates content, shows CircularProgressIndicator while isPartial"
+          },
+          "id": "edge_app_to_user_display"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_agent_provider",
+          "sourceHandle": "bottom",
+          "target": "node_storage_service",
+          "targetHandle": "top",
+          "animated": false,
+          "style": {
+            "stroke": "#64748b",
+            "strokeWidth": 2
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Persist complete conversations to atPlatform storage with TTL",
+            "implementation": "if (!message.isPartial) await _saveConversation(conversation)"
+          },
+          "id": "edge_provider_to_storage"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_storage_service",
+          "sourceHandle": "top",
+          "target": "node_agent_provider",
+          "targetHandle": "bottom",
+          "animated": false,
+          "style": {
+            "stroke": "#64748b",
+            "strokeWidth": 2,
+            "strokeDasharray": "5, 3"
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Retrieve conversation history from atPlatform",
+            "implementation": "await _loadConversations() in reloadConversations()"
+          },
+          "id": "edge_storage_to_provider"
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_agent_daemon",
+          "sourceHandle": "bottom",
+          "target": "node_local_storage",
+          "targetHandle": "top",
+          "animated": false,
+          "style": {
+            "stroke": "#64748b",
+            "strokeWidth": 2,
+            "strokeDasharray": "5, 3"
+          },
+          "label": "Async Comms",
+          "labelStyle": {
+            "fill": "#1e293b",
+            "fontWeight": 600,
+            "fontSize": 12
+          },
+          "labelBgStyle": {
+            "fill": "#f8fafc",
+            "fillOpacity": 0.9
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "description": "Multi-agent coordination via Hive-stored mutex locks",
+            "implementation": "Hive box for mutex state with TTL"
+          },
+          "id": "edge_agent_to_local_storage",
+          "selected": false
+        },
+        {
+          "type": "smoothstep",
+          "source": "node_at_platform_service",
+          "sourceHandle": "bottom",
+          "target": "node_agent_daemon",
+          "targetHandle": "top",
+          "animated": false,
+          "style": {
+            "stroke": "#9b59b6",
+            "strokeWidth": 2.5,
+            "strokeDasharray": "5, 3"
+          },
+          "label": "TCP",
+          "labelStyle": {
+            "fill": "#555",
+            "fontWeight": 500,
+            "fontSize": 12,
+            "stroke": "none",
+            "strokeWidth": 0
+          },
+          "labelBgStyle": {
+            "fill": "white",
+            "fillOpacity": 0.9,
+            "stroke": "none"
+          },
+          "labelBgPadding": [
+            8,
+            4
+          ],
+          "labelBgBorderRadius": 4,
+          "data": {
+            "notes": "",
+            "connectionType": "tcp",
+            "description": "Direct TCP/IP connection"
+          },
+          "className": "edge-tcp",
+          "interactionWidth": 20,
+          "id": "reactflow__edge-node_at_platform_servicebottom-node_agent_daemontop"
+        }
+      ],
+      "brand": "atPlatform"
+    }
+  ],
+  "activeBrand": "atPlatform",
+  "currentPageIndex": 0,
+  "timestamp": "2026-01-20T20:25:48.781Z",
+  "version": "2.0"
+}
